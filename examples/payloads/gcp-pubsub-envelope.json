@@ -1,12 +1,12 @@
 {
   "message": {
     "attributes": {
-      "project_id": "satschel-nonprod",
+      "project_id": "my-nonprod-project",
       "environment": "nonprod"
     },
-    "data": "eyJraW5kIjoiYnVkZ2V0Iiwic2V2ZXJpdHkiOiJoaWdoIiwidGl0bGUiOiJCdWRnZXQgMTAwJSIsInN1bW1hcnkiOiJNb250aGx5IHNwZW5kIHJlYWNoZWQgMTAwJSBvZiB0aGUgJDEwLDAwMCBidWRnZXQuIiwicHJvamVjdF9pZCI6InNhdHNjaGVsLW5vbnByb2QiLCJlbnZpcm9ubWVudCI6Im5vbnByb2QiLCJsYWJlbHMiOnsidGhyZXNob2xkX3BlcmNlbnQiOiIxMDAiLCJidWRnZXRfbmFtZSI6IlNhdHNjaGVsIE5vbnByb2QgLSBNb250aGx5IEJ1ZGdldCBBbGVydCJ9fQ==",
+    "data": "eyJraW5kIjogImJ1ZGdldCIsICJzZXZlcml0eSI6ICJoaWdoIiwgInRpdGxlIjogIk1vbnRobHkgQnVkZ2V0IDEwMCUiLCAic3VtbWFyeSI6ICJNb250aGx5IHNwZW5kIHJlYWNoZWQgMTAwJSBvZiB0aGUgJDEwLDAwMCBidWRnZXQuIiwgInByb2plY3RfaWQiOiAibXktbm9ucHJvZC1wcm9qZWN0IiwgImVudmlyb25tZW50IjogIm5vbnByb2QiLCAibGFiZWxzIjogeyJ0aHJlc2hvbGRfcGVyY2VudCI6ICIxMDAiLCAiYnVkZ2V0X25hbWUiOiAibXktbm9ucHJvZC1wcm9qZWN0LW1vbnRobHkifX0=",
     "messageId": "demo-001",
     "publishTime": "2026-04-25T00:00:00Z"
   },
-  "subscription": "projects/satschel-nonprod/subscriptions/billing-alerts-nonprod-sub"
+  "subscription": "projects/my-nonprod-project/subscriptions/billing-alerts-nonprod-sub"
 }

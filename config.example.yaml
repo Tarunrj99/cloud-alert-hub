@@ -60,6 +60,38 @@ notifications:
     webhook_url_env: SLACK_WEBHOOK_URL         # env var that holds the webhook URL
     default_channel: "#alerts"                 # used when a route has no override
 
+    # --------------------------------------------------------------------
+    # Slack presentation toggles — control exactly what the message shows.
+    # Everything below is optional; defaults are in bundled_defaults.yaml.
+    # Flip to `false` for anything you consider sensitive in your org.
+    # --------------------------------------------------------------------
+    display:
+      show_header:        true      # big severity + title banner
+      show_summary:       true      # 1-2 line human summary
+      show_progress_bar:  true      # unicode spend bar (budget alerts only)
+      show_fields:        true      # cloud / env / project / service pills
+      show_metrics:       true      # cost_amount, budget_amount, latency, etc.
+      show_labels:        false     # raw label dict — noisy; enable if needed
+      show_links:         true      # runbook + budget-console links
+      show_footer:        true      # event_id + timestamp + route
+      # Per-field toggles (all honoured only when show_fields is true):
+      show_cloud:         true
+      show_environment:   true
+      show_project:       true
+      show_service:       true
+      show_kind:          true
+      show_owner:         true
+      show_account:       false     # billing-account ID is sensitive — keep off
+      # Footer field toggles:
+      show_event_id:      true
+      show_occurred_at:   true
+      show_route:         true
+      # Styling / filtering:
+      progress_bar_width: 20
+      label_allow_list: []          # e.g. ["budget_name","threshold_percent"]
+      label_deny_list:  []          # e.g. ["internal_tag","cost_center"]
+      metric_allow_list: []         # empty = show all
+
   email:
     enabled: true
     provider: stdout                           # stdout | smtp | ses | sendgrid
@@ -76,16 +108,16 @@ routing:
   default_route: finops
   routes:
     finops:
-      slack_channel: "#GCP-Alerts-Nonprod"
+      slack_channel: "#alerts-finops"
       email_recipients:
-        - "jayant.sonsurkar@example.com"
-        - "tarun.saini@example.com"
-        - "shubham.nagarwal@example.com"
+        - "finops-lead@example.com"
+        - "finops-oncall@example.com"
     sre:
-      slack_channel: "#sre-alerts"
-      email_recipients: []
+      slack_channel: "#alerts-sre"
+      email_recipients:
+        - "sre-oncall@example.com"
     security:
-      slack_channel: "#security-alerts"
+      slack_channel: "#alerts-security"
       email_recipients:
         - "security@example.com"
 

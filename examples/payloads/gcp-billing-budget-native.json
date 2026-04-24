@@ -1,0 +1,13 @@
+{
+  "message": {
+    "attributes": {
+      "billingAccountId": "01XXXX-YYYYYY-ZZZZZZ",
+      "budgetId": "00000000-0000-0000-0000-000000000000",
+      "schemaVersion": "1.0"
+    },
+    "data": "eyJidWRnZXREaXNwbGF5TmFtZSI6ICJFeGFtcGxlIE5vbnByb2QgTW9udGhseSBCdWRnZXQiLCAiYnVkZ2V0QW1vdW50IjogMTAwMDAuMCwgImNvc3RBbW91bnQiOiA1MDIzLjE4LCAiY3VycmVuY3lDb2RlIjogIlVTRCIsICJhbGVydFRocmVzaG9sZEV4Y2VlZGVkIjogMC41LCAiY29zdEludGVydmFsU3RhcnQiOiAiMjAyNi0wNC0wMVQwMDowMDowMFoiLCAiYnVkZ2V0QW1vdW50VHlwZSI6ICJTUEVDSUZJRURfQU1PVU5UIn0=",
+    "messageId": "gcp-demo-001",
+    "publishTime": "2026-04-25T00:00:00Z"
+  },
+  "subscription": "projects/my-nonprod-project/subscriptions/billing-alerts-nonprod-sub"
+}

@@ -26,6 +26,7 @@
   <a href="docs/QUICKSTART.md">Full tutorial</a> ·
   <a href="docs/CONFIGURATION.md">Config</a> ·
   <a href="docs/FEATURES.md">Features</a> ·
+  <a href="docs/SAMPLE_OUTPUT.md">Sample output</a> ·
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
   <a href="docs/DEBUG_RUNBOOK.md">Debug</a> ·
   <a href="CONTRIBUTING.md">Contribute</a>
@@ -183,6 +184,7 @@ cloud-alert-hub/
 │   ├── QUICKSTART.md
 │   ├── CONFIGURATION.md
 │   ├── FEATURES.md
+│   ├── SAMPLE_OUTPUT.md
 │   ├── ARCHITECTURE.md
 │   ├── DEPLOY_GCP.md
 │   ├── DEPLOY_AWS.md
@@ -217,7 +219,7 @@ my-alerting-function/
 Change the `git+https://...` line in `requirements.txt` to your fork, e.g.
 
 ```
-git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.1.0#egg=cloud-alert-hub
+git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.2.0#egg=cloud-alert-hub
 functions-framework>=3.5.0
 ```
 
@@ -436,10 +438,11 @@ needs to know about new message types, not new delivery channels.
 | [`QUICKSTART.md`](docs/QUICKSTART.md) | 5-minute end-to-end walkthrough |
 | [`CONFIGURATION.md`](docs/CONFIGURATION.md) | Every config key, with examples |
 | [`FEATURES.md`](docs/FEATURES.md) | Built-in features and how to add more |
+| [`SAMPLE_OUTPUT.md`](docs/SAMPLE_OUTPUT.md) | What a rendered Slack alert looks like, for every severity |
 | [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Design rationale and trade-offs |
 | [`DEPLOY_GCP.md`](docs/DEPLOY_GCP.md) | GCP Cloud Function runbook |
 | [`DEPLOY_AWS.md`](docs/DEPLOY_AWS.md) | AWS Lambda runbook |
-| [`DEBUG_RUNBOOK.md`](docs/DEBUG_RUNBOOK.md) | Debug mode + investigation checklist |
+| [`DEBUG_RUNBOOK.md`](docs/DEBUG_RUNBOOK.md) | Debug mode + investigation checklist + smoke-test recipes |
 | [`SCENARIOS.md`](docs/SCENARIOS.md) | Catalog of supported alert scenarios |
 | [`examples/README.md`](examples/README.md) | Index of deployment starters |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Dev setup, PR checklist, commit style |

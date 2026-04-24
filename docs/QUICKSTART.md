@@ -49,8 +49,8 @@ features:
 routing:
   routes:
     finops:
-      slack_channel: "#GCP-Alerts-Nonprod"
-      email_recipients: ["tarun.saini@example.com"]
+      slack_channel: "#alerts-finops"
+      email_recipients: ["finops-oncall@example.com"]
 ```
 
 ## 5. Deploy

@@ -48,8 +48,11 @@ class AlertProcessor:
         }
         delivery_errors: list[dict[str, str]] = []
 
+        alert.route_key = decision.route_key
+
         if decision.target.slack_enabled:
-            slack_msg = render_slack(alert, decision.target.slack_channel)
+            slack_display = self.config.get("notifications", "slack", "display", default={}) or {}
+            slack_msg = render_slack(alert, decision.target.slack_channel, display=slack_display)
             results["deliveries"]["slack"] = self._deliver_with_retry(
                 channel="slack",
                 event_id=alert.event_id,

@@ -1,15 +1,15 @@
 {
   "cloud": "gcp",
   "environment": "nonprod",
-  "project": "satschel-nonprod",
+  "project": "my-nonprod-project",
   "kind": "budget",
   "severity": "high",
-  "title": "Satschel Nonprod — Monthly Budget 100%",
+  "title": "Monthly Budget — 100% reached",
   "summary": "Monthly spend has reached 100% of the $10,000 budget.",
   "owner": "finops",
   "runbook_url": "https://runbooks.example.com/budget",
   "labels": {
-    "budget_name": "Satschel Nonprod - Monthly Budget Alert",
+    "budget_name": "my-nonprod-project-monthly",
     "threshold_percent": "100"
   },
   "metrics": {

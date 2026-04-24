@@ -41,6 +41,29 @@ notifications:
     enabled: false
     webhook_url_env: SLACK_WEBHOOK_URL
     default_channel: "#alerts"
+    display:
+      show_header: true
+      show_summary: true
+      show_progress_bar: true        # budget alerts only
+      show_fields: true
+      show_metrics: true
+      show_labels: false             # chatty — opt in
+      show_links: true
+      show_footer: true
+      show_cloud: true
+      show_environment: true
+      show_project: true
+      show_service: true
+      show_kind: true
+      show_owner: true
+      show_account: false            # billing account ID — sensitive
+      show_event_id: true
+      show_occurred_at: true
+      show_route: true
+      progress_bar_width: 20
+      label_allow_list: []           # empty = show all when show_labels=true
+      label_deny_list: []
+      metric_allow_list: []
   email:
     enabled: false
     provider: stdout

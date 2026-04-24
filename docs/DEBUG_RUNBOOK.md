@@ -130,3 +130,94 @@ custom-metrics API.
    ```
 
 4. Inspect the `debug.trace` to understand the routing decision.
+
+## 7. Smoke tests you can copy-paste
+
+### GCP — all four severities
+
+Publishes four synthetic budget events (one at each severity band) into a
+Pub/Sub topic your Cloud Function already subscribes to. No real Cloud
+Billing budget is touched.
+
+```bash
+PROJECT_ID="my-nonprod-project"
+TOPIC="billing-alerts-nonprod"
+
+for frac in 0.50 0.90 1.20 2.10; do
+  pct=$(python3 -c "print(int(round($frac*100)))")
+  gcloud pubsub topics publish "$TOPIC" --project="$PROJECT_ID" \
+    --attribute=billingAccountId=smoke-test,budgetId=smoke-test,schemaVersion=1.0 \
+    --message="{\"budgetDisplayName\":\"smoke test (${pct}%)\",\
+\"budgetAmount\":10000,\"costAmount\":$(python3 -c "print(10000*$frac)"),\
+\"currencyCode\":\"USD\",\"alertThresholdExceeded\":$frac,\
+\"costIntervalStart\":\"2026-04-01T00:00:00Z\",\"budgetAmountType\":\"SPECIFIED_AMOUNT\"}"
+  sleep 2
+done
+
+gcloud functions logs read cloud-alert-hub-nonprod \
+  --project="$PROJECT_ID" --region=us-central1 --gen2 --limit=30
+```
+
+Expected: four `cloud_alert_hub: processed route=finops event_id=…` log lines
+and four Slack messages (LOW / MEDIUM / HIGH / CRITICAL).
+
+### GCP — monitoring incident (critical)
+
+```bash
+gcloud pubsub topics publish "$TOPIC" --project="$PROJECT_ID" \
+  --message='{"version":"1.2","incident":{"incident_id":"demo","scoping_project_id":"my-nonprod-project","policy_name":"Error rate too high","condition_name":"5xx > 5%","state":"open","summary":"Error rate 12% for Cloud Run","url":"https://console.cloud.google.com/monitoring/alerting"}}'
+```
+
+### AWS — Lambda smoke
+
+```bash
+SNS_TOPIC_ARN=arn:aws:sns:us-east-1:123456789012:alerts
+
+aws sns publish --topic-arn "$SNS_TOPIC_ARN" \
+  --message='{"kind":"budget","title":"AWS smoke 120%","summary":"test","severity":"high",
+"labels":{"budget_name":"demo","threshold_percent":"120"}}'
+
+aws logs tail /aws/lambda/cloud-alert-hub-nonprod --follow
+```
+
+### Local dev server
+
+```bash
+export INGEST_SHARED_TOKEN=dev-token          # or turn off ingress_auth
+make run-server &
+curl -sX POST http://127.0.0.1:8000/ingest/generic \
+  -H 'content-type: application/json' \
+  -H 'x-ingest-token: dev-token' \
+  -d @examples/payloads/generic-budget-alert.json | jq
+```
+
+### Dry-run the whole pipeline in one shell
+
+Useful before any real deploy to verify that your `config.yaml` + the library
+produce the exact Slack layout you want:
+
+```bash
+python - <<'PY'
+import base64, json, os
+os.environ["DRY_RUN"] = "true"
+os.environ["SLACK_WEBHOOK_URL"] = "https://hooks.slack.com/services/DUMMY/DUMMY/DUMMY"
+
+from cloud_alert_hub import handle_gcp_pubsub
+
+with open("examples/payloads/gcp-billing-budget-native.json") as f:
+    envelope = json.load(f)
+
+print(json.dumps(
+    handle_gcp_pubsub(envelope, config="./config.yaml"),
+    indent=2, default=str))
+PY
+```
+
+## 8. Rolling back
+
+1. Keep the previous tag reference in `requirements.txt` (e.g. `@v0.1.0`).
+2. Redeploy — `gcloud functions deploy` creates a new revision; traffic
+   switches atomically. If the new revision crashes on startup, Cloud Run
+   keeps serving the previous revision.
+3. If you must fully revert: rerun `deploy.sh` with the old tag pinned.
+
