@@ -40,8 +40,10 @@ notifications:
     # ------------------------------------------------------------------
     display:
       show_header:        true
+      show_environment_in_header: true   # "[HIGH · nonprod] …"
       show_summary:       true
       show_progress_bar:  true     # unicode spend bar for budget alerts
+      show_budget_details: true    # name / amount / period / spent / remaining
       show_fields:        true
       show_metrics:       true
       show_labels:        false    # raw label dict — chatty

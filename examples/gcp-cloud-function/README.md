@@ -65,11 +65,11 @@ cd ~/cloud-alert-hub-deploys/nonprod-budget-alerts
 ### 4. Pin `requirements.txt` to a release tag
 
 ```text
-git+https://github.com/<you>/cloud-alert-hub.git@v0.2.0#egg=cloud-alert-hub
+git+https://github.com/<you>/cloud-alert-hub.git@v0.2.1#egg=cloud-alert-hub
 functions-framework>=3.5.0
 ```
 
-Using `@main` is only good for rapid iteration — pin to a tag (`@v0.2.0`) or
+Using `@main` is only good for rapid iteration — pin to a tag (`@v0.2.1`) or
 a commit SHA for production deploys so redeploys are reproducible.
 
 ### 5. Edit `config.yaml` for your environment

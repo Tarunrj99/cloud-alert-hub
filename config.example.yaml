@@ -67,8 +67,10 @@ notifications:
     # --------------------------------------------------------------------
     display:
       show_header:        true      # big severity + title banner
+      show_environment_in_header: true  # "[HIGH · nonprod] …" in the title
       show_summary:       true      # 1-2 line human summary
       show_progress_bar:  true      # unicode spend bar (budget alerts only)
+      show_budget_details: true     # name / amount / period / spent / remaining (budget only)
       show_fields:        true      # cloud / env / project / service pills
       show_metrics:       true      # cost_amount, budget_amount, latency, etc.
       show_labels:        false     # raw label dict — noisy; enable if needed

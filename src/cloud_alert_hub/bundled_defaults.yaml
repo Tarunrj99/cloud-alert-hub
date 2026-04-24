@@ -43,8 +43,10 @@ notifications:
     default_channel: "#alerts"
     display:
       show_header: true
+      show_environment_in_header: true   # "[HIGH · nonprod] …" in the title
       show_summary: true
       show_progress_bar: true        # budget alerts only
+      show_budget_details: true      # budget alerts only (name / period / remaining)
       show_fields: true
       show_metrics: true
       show_labels: false             # chatty — opt in

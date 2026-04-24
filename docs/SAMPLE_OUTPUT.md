@@ -40,74 +40,86 @@ Severity is set by `BudgetAlertsFeature._severity_for_threshold` — see
 ## 50% — LOW
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  [LOW] Example Nonprod Monthly Budget — 50% reached                       │
-├──────────────────────────────────────────────────────────────────────────┤
-│  🟡 LOW    💰 budget    🌏 nonprod                                         │
-│                                                                          │
-│  Spend has reached 50% of the budget ($5,000.00 of $10,000.00).          │
-│                                                                          │
-│  Spend progress: ███████████░░░░░░░░░░░ 50%                               │
-│  Spent $5,000.00 of $10,000.00                                            │
-│  ────────────────────────────────────────────────────────────────────     │
-│  Cloud           Environment         Project              Type            │
-│  gcp             nonprod             my-nonprod-project   budget          │
-│                                                                          │
-│  Metrics                                                                  │
-│  • cost_amount:   $5,000.00                                               │
-│  • budget_amount: $10,000.00                                              │
-│                                                                          │
-│  🔗 Budget console                                                        │
-│  event_id f6cd9fbf-…  •  🕒 2026-04-25 09:00 UTC  •  🧭 route finops      │
-└──────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│  [LOW · nonprod] Example Nonprod Monthly Budget — 50% reached            │
+├─────────────────────────────────────────────────────────────────────────┤
+│  🟡 LOW    💰 budget    🌏 nonprod                                        │
+│                                                                         │
+│  Spend has reached 50% of the budget ($5,000.00 of $10,000.00).         │
+│                                                                         │
+│  Spend progress: ███████████░░░░░░░░░░░ 50%                              │
+│  Spent $5,000.00 of $10,000.00                                           │
+│  ─────────────────────────────────────────────────────────────────      │
+│  Budget name:      Example Nonprod Monthly Budget                       │
+│  Budget amount:    $10,000.00 (Specified amount)                        │
+│  Billing period:   April 2026                                           │
+│  Spent so far:     $5,000.00                                            │
+│  Remaining:        $5,000.00                                            │
+│  ─────────────────────────────────────────────────────────────────      │
+│  Cloud           Environment         Project              Type           │
+│  gcp             nonprod             my-nonprod-project   budget         │
+│                                                                         │
+│  Metrics                                                                 │
+│  • cost_amount:   $5,000.00                                              │
+│  • budget_amount: $10,000.00                                             │
+│                                                                         │
+│  🔗 Budget console                                                       │
+│  event_id f6cd9fbf-…  •  🕒 2026-04-25 09:00 UTC  •  🧭 route finops     │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 90% — MEDIUM
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  [MEDIUM] Example Nonprod Monthly Budget — 90% reached                    │
-├──────────────────────────────────────────────────────────────────────────┤
-│  🔶 MEDIUM    💰 budget    🌏 nonprod                                      │
-│                                                                          │
-│  Spend has reached 90% of the budget ($9,000.00 of $10,000.00).          │
-│                                                                          │
-│  Spend progress: ████████████████████░░ 90%                               │
-│  Spent $9,000.00 of $10,000.00                                            │
-│  … (same structured fields as above) …                                    │
-└──────────────────────────────────────────────────────────────────────────┘
+[MEDIUM · nonprod] Example Nonprod Monthly Budget — 90% reached
+🔶 MEDIUM    💰 budget    🌏 nonprod
+
+Spend has reached 90% of the budget ($9,000.00 of $10,000.00).
+Spend progress: ████████████████████░░ 90%
+Spent $9,000.00 of $10,000.00
+───────────────────────────
+Budget name:      Example Nonprod Monthly Budget
+Budget amount:    $10,000.00 (Specified amount)
+Billing period:   April 2026
+Spent so far:     $9,000.00
+Remaining:        $1,000.00
+…same Cloud / Environment / Project / Metrics / footer as above…
 ```
 
 ## 120% — HIGH
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  [HIGH] Example Nonprod Monthly Budget — 120% reached                     │
-├──────────────────────────────────────────────────────────────────────────┤
-│  🔴 HIGH    💰 budget    🌏 nonprod                                        │
-│                                                                          │
-│  Spend has reached 120% of the budget ($12,000.00 of $10,000.00).        │
-│                                                                          │
-│  Spend progress: ██████████████████████ 120%    ← bar is capped at 100% │
-│  Spent $12,000.00 of $10,000.00                                           │
-│  … (same structured fields as above) …                                    │
-└──────────────────────────────────────────────────────────────────────────┘
+[HIGH · nonprod] Example Nonprod Monthly Budget — 120% reached
+🔴 HIGH    💰 budget    🌏 nonprod
+
+Spend has reached 120% of the budget ($12,000.00 of $10,000.00).
+Spend progress: ██████████████████████ 120%    ← bar is capped at 100%
+Spent $12,000.00 of $10,000.00
+───────────────────────────
+Budget name:      Example Nonprod Monthly Budget
+Budget amount:    $10,000.00 (Specified amount)
+Billing period:   April 2026
+Spent so far:     $12,000.00
+Over budget:      ⚠ $2,000.00
+…
 ```
 
 ## 210% — CRITICAL
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  [CRITICAL] Example Nonprod Monthly Budget — 210% reached                 │
-├──────────────────────────────────────────────────────────────────────────┤
-│  🚨 CRITICAL    💰 budget    🌏 nonprod                                    │
-│                                                                          │
-│  Spend has reached 210% of the budget ($21,000.00 of $10,000.00).        │
-│                                                                          │
-│  Spend progress: ██████████████████████ 210%    ← bar is capped at 100% │
-│  Spent $21,000.00 of $10,000.00                                           │
-│  … (same structured fields as above) …                                    │
-└──────────────────────────────────────────────────────────────────────────┘
+[CRITICAL · nonprod] Example Nonprod Monthly Budget — 210% reached
+🚨 CRITICAL    💰 budget    🌏 nonprod
+
+Spend has reached 210% of the budget ($21,000.00 of $10,000.00).
+Spend progress: ██████████████████████ 210%    ← bar is capped at 100%
+Spent $21,000.00 of $10,000.00
+───────────────────────────
+Budget name:      Example Nonprod Monthly Budget
+Budget amount:    $10,000.00 (Specified amount)
+Billing period:   April 2026
+Spent so far:     $21,000.00
+Over budget:      ⚠ $11,000.00
+…
 ```
 
 ## Anatomy of a message
@@ -117,16 +129,17 @@ Each one can be suppressed individually via `notifications.slack.display.*`:
 
 | # | Section | Config key | Notes |
 |--:|---------|-----------|-------|
-| 1 | Header                    | `show_header` | Plain-text title with severity pill |
+| 1 | Header                    | `show_header` + `show_environment_in_header` | Plain-text title with severity pill; environment is prefixed so it's visible in Slack notification previews |
 | 2 | Severity + kind banner    | `show_header` | Emoji + severity + kind + environment |
 | 3 | Summary                   | `show_summary` | 1-2 line human-readable description |
 | 4 | Progress bar              | `show_progress_bar` | Budget alerts only |
 | 5 | Divider                   | implicit | Only rendered when fields are shown |
-| 6 | Fields grid               | `show_fields` + `show_cloud` / `show_environment` / `show_project` / `show_service` / `show_kind` / `show_owner` / `show_account` | Structured key/value cells |
-| 7 | Metrics list              | `show_metrics` | Numeric metrics like `cost_amount`, `error_rate_percent` |
-| 8 | Labels list               | `show_labels` | Free-form label dict (opt-in — chatty) |
-| 9 | Links / Runbook           | `show_links` | Runbook URL + any payload-provided links |
-|10 | Footer                    | `show_footer` + `show_event_id` / `show_occurred_at` / `show_route` | Audit trail info |
+| 6 | **Budget details**        | `show_budget_details` | **Budget alerts only** — name, amount (currency + type), billing period, spent, remaining/overage |
+| 7 | Fields grid               | `show_fields` + `show_cloud` / `show_environment` / `show_project` / `show_service` / `show_kind` / `show_owner` / `show_account` | Structured key/value cells |
+| 8 | Metrics list              | `show_metrics` | Numeric metrics like `cost_amount`, `error_rate_percent` |
+| 9 | Labels list               | `show_labels` | Free-form label dict (opt-in — chatty) |
+|10 | Links / Runbook           | `show_links` | Runbook URL + any payload-provided links |
+|11 | Footer                    | `show_footer` + `show_event_id` / `show_occurred_at` / `show_route` | Audit trail info |
 
 ## Full Block Kit JSON (120% case)
 
@@ -141,7 +154,7 @@ preview visually.
   "blocks": [
     { "type": "header",
       "text": { "type": "plain_text", "emoji": true,
-                "text": "[HIGH] Example Nonprod Monthly Budget — 120% reached" } },
+                "text": "[HIGH · nonprod] Example Nonprod Monthly Budget — 120% reached" } },
 
     { "type": "section",
       "text": { "type": "mrkdwn",
@@ -154,6 +167,17 @@ preview visually.
     { "type": "section",
       "text": { "type": "mrkdwn",
                 "text": "*Spend progress:* `██████████████████████` *120%*\nSpent $12,000.00  of  $10,000.00" } },
+
+    { "type": "divider" },
+
+    { "type": "section",
+      "fields": [
+        { "type": "mrkdwn", "text": "*Budget name:*\n`Example Nonprod Monthly Budget`" },
+        { "type": "mrkdwn", "text": "*Budget amount:*\n$10,000.00  _(Specified amount)_" },
+        { "type": "mrkdwn", "text": "*Billing period:*\nApril 2026" },
+        { "type": "mrkdwn", "text": "*Spent so far:*\n$12,000.00" },
+        { "type": "mrkdwn", "text": "*Over budget:*\n:warning: $2,000.00" }
+      ] },
 
     { "type": "divider" },
 

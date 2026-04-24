@@ -29,9 +29,38 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import datetime
 from typing import Any
 
 from ..models import CanonicalAlert
+
+
+_AMOUNT_TYPE_LABELS = {
+    "SPECIFIED_AMOUNT": "Specified amount",
+    "LAST_PERIODS_AMOUNT": "Last period's amount",
+}
+
+
+def _format_period_label(cost_interval_start: str | None) -> str | None:
+    """Turn the ``costIntervalStart`` ISO timestamp into a short period label.
+
+    Examples:
+        ``2026-04-01T00:00:00Z`` → ``"April 2026"`` (start of a calendar month)
+        ``2026-04-15T00:00:00Z`` → ``"from 2026-04-15"`` (mid-month start)
+
+    We deliberately don't try to *guess* whether the budget is monthly /
+    quarterly / yearly — the Pub/Sub payload doesn't carry that information.
+    Operators should convey the period cadence in the budget's display name.
+    """
+    if not cost_interval_start:
+        return None
+    try:
+        dt = datetime.fromisoformat(cost_interval_start.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.day == 1:
+        return dt.strftime("%B %Y")
+    return f"from {dt.strftime('%Y-%m-%d')}"
 
 
 def _decode_data(data: str | None) -> dict[str, Any]:
@@ -109,11 +138,20 @@ def _from_native_budget(
     labels = {
         "budget_name": str(budget_name),
         "threshold_percent": str(threshold_percent),
+        "currency": str(currency),
     }
-    if decoded.get("budgetAmountType"):
-        labels["budget_amount_type"] = str(decoded["budgetAmountType"])
-    if decoded.get("costIntervalStart"):
-        labels["cost_interval_start"] = str(decoded["costIntervalStart"])
+    amount_type_raw = decoded.get("budgetAmountType")
+    if amount_type_raw:
+        labels["budget_amount_type"] = str(amount_type_raw)
+        labels["budget_amount_type_label"] = _AMOUNT_TYPE_LABELS.get(
+            str(amount_type_raw), str(amount_type_raw).replace("_", " ").title()
+        )
+    cost_interval_start = decoded.get("costIntervalStart")
+    if cost_interval_start:
+        labels["cost_interval_start"] = str(cost_interval_start)
+        period_label = _format_period_label(str(cost_interval_start))
+        if period_label:
+            labels["period_label"] = period_label
 
     metrics: dict[str, float] = {}
     if isinstance(cost_amount, (int, float)):

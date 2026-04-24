@@ -57,8 +57,10 @@ _KIND_EMOJI = {
 # the renderer still works if a caller passes a bare dict without defaults.
 _DEFAULT_DISPLAY = {
     "show_header": True,
+    "show_environment_in_header": True,   # shows as "[HIGH · nonprod] …"
     "show_summary": True,
     "show_progress_bar": True,
+    "show_budget_details": True,          # budget alerts only
     "show_fields": True,
     "show_metrics": True,
     "show_labels": False,  # noisy by default — opt in
@@ -146,12 +148,16 @@ def _truncate(text: str, limit: int) -> str:
 # -----------------------------------------------------------------------------
 
 
-def _header_block(alert: CanonicalAlert) -> dict:
+def _header_block(alert: CanonicalAlert, show_environment_in_header: bool) -> dict:
     sev = alert.severity.lower()
     sev_pill = _SEVERITY_PILL.get(sev, alert.severity.upper())
     # Slack `header` blocks only accept plain_text, no emoji shortcodes, so
     # visual emojis are rendered by the severity banner section below.
-    text = _truncate(f"[{sev_pill}] {alert.title}", 150)
+    prefix = f"[{sev_pill}"
+    if show_environment_in_header and alert.environment and alert.environment != "unknown":
+        prefix += f" · {alert.environment}"
+    prefix += "]"
+    text = _truncate(f"{prefix} {alert.title}", 150)
     return {"type": "header", "text": {"type": "plain_text", "text": text, "emoji": True}}
 
 
@@ -199,6 +205,71 @@ def _progress_block(alert: CanonicalAlert, width: int) -> dict | None:
     heading = f"*Spend progress:* `{bar}` *{pct:.0f}%*"
     detail = f"Spent {cost_fmt}  of  {budget_fmt}"
     return {"type": "section", "text": {"type": "mrkdwn", "text": f"{heading}\n{detail}"}}
+
+
+def _budget_details_block(alert: CanonicalAlert) -> dict | None:
+    """Structured budget-specific metadata: name, amount, period, spent,
+    remaining/overage. Budget alerts only.
+    """
+    if alert.kind != "budget":
+        return None
+
+    labels = alert.labels or {}
+    metrics = alert.metrics or {}
+    currency = (
+        alert.annotations.get("currencyCode")
+        or labels.get("currency")
+        or "USD"
+    )
+
+    cost = metrics.get("cost_amount")
+    budget = metrics.get("budget_amount")
+    remaining = None
+    overage = None
+    if isinstance(cost, (int, float)) and isinstance(budget, (int, float)):
+        diff = budget - cost
+        if diff >= 0:
+            remaining = diff
+        else:
+            overage = -diff
+
+    fields: list[dict[str, str]] = []
+
+    budget_name = labels.get("budget_name")
+    if budget_name:
+        fields.append({"type": "mrkdwn", "text": f"*Budget name:*\n`{budget_name}`"})
+
+    if isinstance(budget, (int, float)):
+        amount_type = labels.get("budget_amount_type_label")
+        amt_txt = _format_currency_amount(budget, currency)
+        if amount_type:
+            amt_txt = f"{amt_txt}  _({amount_type})_"
+        fields.append({"type": "mrkdwn", "text": f"*Budget amount:*\n{amt_txt}"})
+
+    period_label = labels.get("period_label") or labels.get("cost_interval_start")
+    if period_label:
+        fields.append({"type": "mrkdwn", "text": f"*Billing period:*\n{period_label}"})
+
+    if isinstance(cost, (int, float)):
+        fields.append(
+            {"type": "mrkdwn", "text": f"*Spent so far:*\n{_format_currency_amount(cost, currency)}"}
+        )
+
+    if remaining is not None:
+        fields.append(
+            {"type": "mrkdwn",
+             "text": f"*Remaining:*\n{_format_currency_amount(remaining, currency)}"}
+        )
+    elif overage is not None:
+        fields.append(
+            {"type": "mrkdwn",
+             "text": f"*Over budget:*\n:warning: {_format_currency_amount(overage, currency)}"}
+        )
+
+    if not fields:
+        return None
+
+    return {"type": "section", "fields": fields[:10]}
 
 
 def _fields_block(alert: CanonicalAlert, display: dict[str, Any]) -> dict | None:
@@ -318,7 +389,7 @@ def render_slack(
 
     blocks: list[dict] = []
     if cfg["show_header"]:
-        blocks.append(_header_block(alert))
+        blocks.append(_header_block(alert, bool(cfg.get("show_environment_in_header", True))))
         blocks.append(_severity_banner(alert))
     if cfg["show_summary"] and alert.summary:
         blocks.append(_summary_block(alert))
@@ -326,6 +397,11 @@ def render_slack(
         pb = _progress_block(alert, width=int(cfg["progress_bar_width"]))
         if pb:
             blocks.append(pb)
+    if cfg.get("show_budget_details", True):
+        bd = _budget_details_block(alert)
+        if bd:
+            blocks.append({"type": "divider"})
+            blocks.append(bd)
     if cfg["show_fields"]:
         fb = _fields_block(alert, cfg)
         if fb:

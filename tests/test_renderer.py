@@ -71,6 +71,7 @@ def test_slack_display_toggles_suppress_sections() -> None:
         "show_header": False,
         "show_summary": False,
         "show_progress_bar": False,
+        "show_budget_details": False,
         "show_fields": False,
         "show_metrics": False,
         "show_labels": False,
@@ -143,6 +144,88 @@ def test_slack_non_budget_has_no_progress_bar() -> None:
 
 
 # ---------- Email ----------
+
+def test_slack_header_includes_environment_by_default() -> None:
+    alert = _budget_alert(environment="nonprod")
+    msg = render_slack(alert, channel="#x")
+    header = msg.blocks[0]
+    assert header["type"] == "header"
+    assert "nonprod" in header["text"]["text"]
+    assert "[HIGH · nonprod]" in header["text"]["text"]
+
+
+def test_slack_header_hides_environment_when_toggled() -> None:
+    alert = _budget_alert(environment="nonprod")
+    msg = render_slack(alert, channel="#x", display={"show_environment_in_header": False})
+    header = msg.blocks[0]
+    assert "nonprod" not in header["text"]["text"]
+    assert header["text"]["text"].startswith("[HIGH]")
+
+
+def test_slack_budget_details_section_shows_for_budget_kind() -> None:
+    alert = _budget_alert(
+        labels={
+            "budget_name": "example-monthly",
+            "threshold_percent": "120",
+            "currency": "USD",
+            "budget_amount_type_label": "Specified amount",
+            "period_label": "April 2026",
+        },
+    )
+    msg = render_slack(alert, channel="#x")
+    serialised = str(msg.model_dump())
+    assert "Budget name" in serialised
+    assert "example-monthly" in serialised
+    assert "April 2026" in serialised
+    assert "Specified amount" in serialised
+    assert "Budget amount" in serialised
+    assert "Spent so far" in serialised
+
+
+def test_slack_budget_details_remaining_when_under_budget() -> None:
+    alert = _budget_alert(
+        severity="medium",
+        title="demo 90%",
+        metrics={"cost_amount": 9000.0, "budget_amount": 10000.0, "threshold_fraction": 0.9},
+        labels={"budget_name": "demo", "threshold_percent": "90", "currency": "USD",
+                "period_label": "April 2026"},
+    )
+    msg = render_slack(alert, channel="#x")
+    serialised = str(msg.model_dump())
+    assert "Remaining" in serialised
+    assert "$1,000.00" in serialised
+    assert "Over budget" not in serialised
+
+
+def test_slack_budget_details_overage_when_over_budget() -> None:
+    alert = _budget_alert(
+        title="demo 120%",
+        metrics={"cost_amount": 12000.0, "budget_amount": 10000.0, "threshold_fraction": 1.2},
+        labels={"budget_name": "demo", "threshold_percent": "120", "currency": "USD",
+                "period_label": "April 2026"},
+    )
+    msg = render_slack(alert, channel="#x")
+    serialised = str(msg.model_dump())
+    assert "Over budget" in serialised
+    assert "$2,000.00" in serialised
+    assert "Remaining" not in serialised
+
+
+def test_slack_budget_details_hidden_by_toggle() -> None:
+    alert = _budget_alert()
+    msg = render_slack(alert, channel="#x", display={"show_budget_details": False})
+    serialised = str(msg.model_dump())
+    assert "Budget name" not in serialised
+    assert "Billing period" not in serialised
+
+
+def test_slack_budget_details_skipped_for_non_budget() -> None:
+    alert = _budget_alert(kind="service", title="error rate high", severity="high")
+    msg = render_slack(alert, channel="#x")
+    serialised = str(msg.model_dump())
+    assert "Budget name" not in serialised
+    assert "Billing period" not in serialised
+
 
 def test_email_body_includes_key_fields() -> None:
     alert = _budget_alert()

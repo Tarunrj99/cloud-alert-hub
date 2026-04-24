@@ -10,6 +10,43 @@ _No unreleased changes yet._
 
 ---
 
+## [0.2.1] — 2026-04-25
+
+Polish release — adds budget-specific detail fields that auditors ask about
+(period, currency, remaining/overage) and makes the environment visible in
+Slack notification previews.
+
+### Added
+
+- **Environment in the Slack header** — titles now render as
+  `[HIGH · nonprod] Budget name — 120% reached` so the environment is
+  visible in Slack desktop/mobile notification previews, not just after
+  clicking into the message. Togglable via
+  `notifications.slack.display.show_environment_in_header` (default `true`).
+- **Dedicated Budget details section** for `kind=budget` alerts — renders
+  a five-field grid with the budget's display name, total amount (with
+  currency + amount-type label), billing period, amount spent so far, and
+  either remaining or over-budget amount. Togglable via
+  `notifications.slack.display.show_budget_details` (default `true`).
+- **Human-readable period + amount-type labels** in the GCP adapter —
+  `costIntervalStart` becomes `period_label` (`"April 2026"` for calendar
+  months, `"from 2026-04-15"` for mid-month starts); `budgetAmountType`
+  becomes `budget_amount_type_label` (`"Specified amount"` /
+  `"Last period's amount"`). Currency code is also stored as a label so
+  renderers don't have to hunt.
+- **Over-budget warning styling** — when spend exceeds the budget the
+  details section switches from "Remaining" to "Over budget: ⚠ $X".
+- 8 new tests (47 total passing, ruff clean): env-in-header on/off, budget
+  details render/hide, remaining vs overage, non-budget kinds suppressing
+  the section, mid-month period labels, and amount-type label mapping.
+
+### Notes
+
+- Fully backward compatible with `v0.2.0` configs. Existing deployments
+  will see the new sections appear automatically after bumping the pin.
+
+---
+
 ## [0.2.0] — 2026-04-25
 
 First production-hardening release after initial GCP nonprod deployment.
@@ -126,6 +163,7 @@ Initial public release.
 - Status: beta — API surface is considered stable but may evolve before
   1.0. Breaking changes will be called out under `## [Unreleased]`.
 
-[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.1.0

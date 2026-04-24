@@ -54,6 +54,25 @@ def test_native_billing_budget_payload_is_parsed() -> None:
     assert alert.metrics["budget_amount"] == 10000.0
     assert alert.metrics["threshold_fraction"] == 0.5
     assert "console.cloud.google.com/billing" in next(iter(alert.links.values()))
+    assert alert.labels["currency"] == "USD"
+    assert alert.labels["budget_amount_type"] == "SPECIFIED_AMOUNT"
+    assert alert.labels["budget_amount_type_label"] == "Specified amount"
+    assert alert.labels["period_label"] == "April 2026"
+
+
+def test_native_budget_period_label_for_mid_month_start() -> None:
+    inner = {
+        "budgetDisplayName": "weird",
+        "budgetAmount": 100.0,
+        "costAmount": 50.0,
+        "currencyCode": "USD",
+        "alertThresholdExceeded": 0.5,
+        "costIntervalStart": "2026-04-15T00:00:00Z",
+        "budgetAmountType": "LAST_PERIODS_AMOUNT",
+    }
+    alert = from_gcp_pubsub(_envelope(inner))
+    assert alert.labels["period_label"] == "from 2026-04-15"
+    assert alert.labels["budget_amount_type_label"] == "Last period's amount"
 
 
 def test_native_budget_severity_maps_to_percent() -> None:
