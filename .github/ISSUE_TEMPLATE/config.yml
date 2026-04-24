@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Tarunrj99/cloud-alert-hub/security/advisories/new
+    about: Report a security issue privately — do NOT open a public issue. See SECURITY.md.
+  - name: Question / discussion
+    url: https://github.com/Tarunrj99/cloud-alert-hub/discussions
+    about: Ask a question or share ideas (enable Discussions on the repo first).

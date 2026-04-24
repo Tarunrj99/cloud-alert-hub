@@ -1,0 +1,41 @@
+# AWS Lambda deployment override. Same schema as the GCP example;
+# different cloud, different routing channel.
+
+app:
+  name: aws-budget-alerts
+  environment: nonprod
+  cloud: aws
+  alerting_enabled: true
+
+features:
+  budget_alerts:
+    enabled: true
+    thresholds_percent: [50, 70, 90, 100, 110, 125, 150, 200]
+    dedupe_window_seconds: 1800
+    route: finops
+
+  security_audit:
+    enabled: true
+    dedupe_window_seconds: 300
+    route: security
+
+notifications:
+  slack:
+    enabled: true
+    webhook_url_env: SLACK_WEBHOOK_URL
+    default_channel: "#aws-alerts"
+  email:
+    enabled: false
+
+routing:
+  default_route: finops
+  routes:
+    finops:
+      slack_channel: "#aws-billing-alerts"
+      email_recipients: []
+    security:
+      slack_channel: "#aws-security-alerts"
+      email_recipients: []
+
+state:
+  backend: memory

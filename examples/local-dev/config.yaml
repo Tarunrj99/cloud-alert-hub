@@ -1,0 +1,50 @@
+# Local-dev config. Everything is in dry_run by default so you can iterate
+# without spamming real channels.
+
+app:
+  name: cloud-alert-hub-local
+  environment: dev
+  cloud: gcp
+  alerting_enabled: true
+  dry_run: true        # flip off once you wire SLACK_WEBHOOK_URL
+  debug_mode: true     # include policy trace in every response
+
+features:
+  budget_alerts:
+    enabled: true
+    thresholds_percent: [50, 70, 90, 100, 110, 120, 150, 200, 300]
+  service_slo:
+    enabled: true
+  security_audit:
+    enabled: true
+  infrastructure_spike:
+    enabled: true
+
+notifications:
+  slack:
+    enabled: true
+    webhook_url_env: SLACK_WEBHOOK_URL
+    default_channel: "#dev-alerts"
+  email:
+    enabled: true
+    provider: stdout
+
+routing:
+  default_route: finops
+  routes:
+    finops:
+      slack_channel: "#dev-alerts"
+      email_recipients: ["dev@example.com"]
+    sre:
+      slack_channel: "#dev-alerts"
+      email_recipients: []
+    security:
+      slack_channel: "#dev-alerts"
+      email_recipients: []
+
+state:
+  backend: file
+  file_path: /tmp/cloud-alert-hub-dev-dedupe.json
+
+ingress_auth:
+  enabled: false

@@ -1,0 +1,22 @@
+{
+  "cloud": "gcp",
+  "environment": "nonprod",
+  "project": "satschel-nonprod",
+  "kind": "budget",
+  "severity": "high",
+  "title": "Satschel Nonprod — Monthly Budget 100%",
+  "summary": "Monthly spend has reached 100% of the $10,000 budget.",
+  "owner": "finops",
+  "runbook_url": "https://runbooks.example.com/budget",
+  "labels": {
+    "budget_name": "Satschel Nonprod - Monthly Budget Alert",
+    "threshold_percent": "100"
+  },
+  "metrics": {
+    "cost_amount_usd": 10012.34,
+    "budget_amount_usd": 10000
+  },
+  "links": {
+    "Budget console": "https://console.cloud.google.com/billing/budgets"
+  }
+}

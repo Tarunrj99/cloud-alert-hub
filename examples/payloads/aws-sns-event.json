@@ -1,0 +1,12 @@
+{
+  "Records": [
+    {
+      "EventSource": "aws:sns",
+      "Sns": {
+        "Type": "Notification",
+        "Subject": "AWS Budget threshold 100%",
+        "Message": "{\"kind\":\"budget\",\"severity\":\"high\",\"title\":\"AWS Budget 100%\",\"summary\":\"Monthly AWS spend reached 100%.\",\"environment\":\"nonprod\",\"account_id\":\"123456789012\",\"labels\":{\"budget_name\":\"nonprod-monthly\",\"threshold_percent\":\"100\"}}"
+      }
+    }
+  ]
+}

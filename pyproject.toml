@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloud-alert-hub"
+version = "0.1.0"
+description = "A cloud-agnostic alerting hub. Ingests billing, SLO, security, and infrastructure events from any cloud and delivers them to Slack and email, driven by a single YAML config."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Tarun Saini" }]
+keywords = ["alerting", "slack", "monitoring", "gcp", "aws", "azure", "cloud-function", "lambda", "pubsub", "sns"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: System :: Monitoring",
+]
+dependencies = [
+  "pydantic>=2.9.0",
+  "pyyaml>=6.0.2",
+  "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+# Run the optional local FastAPI server (examples/local-dev).
+server = [
+  "fastapi>=0.115.0",
+  "uvicorn>=0.30.0",
+  "python-dotenv>=1.0.1",
+]
+# Everything needed to develop on the library itself.
+dev = [
+  "pytest>=8.3.0",
+  "ruff>=0.6.0",
+  "fastapi>=0.115.0",
+  "uvicorn>=0.30.0",
+  "python-dotenv>=1.0.1",
+]
+
+[project.urls]
+# Update these to point at your public fork once you've pushed the repo.
+Homepage = "https://github.com/Tarunrj99/cloud-alert-hub"
+Source = "https://github.com/Tarunrj99/cloud-alert-hub"
+Issues = "https://github.com/Tarunrj99/cloud-alert-hub/issues"
+Documentation = "https://github.com/Tarunrj99/cloud-alert-hub/tree/main/docs"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cloud_alert_hub*"]
+
+[tool.setuptools.package-data]
+cloud_alert_hub = ["bundled_defaults.yaml"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

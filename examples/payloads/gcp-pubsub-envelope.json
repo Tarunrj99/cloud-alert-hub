@@ -1,0 +1,12 @@
+{
+  "message": {
+    "attributes": {
+      "project_id": "satschel-nonprod",
+      "environment": "nonprod"
+    },
+    "data": "eyJraW5kIjoiYnVkZ2V0Iiwic2V2ZXJpdHkiOiJoaWdoIiwidGl0bGUiOiJCdWRnZXQgMTAwJSIsInN1bW1hcnkiOiJNb250aGx5IHNwZW5kIHJlYWNoZWQgMTAwJSBvZiB0aGUgJDEwLDAwMCBidWRnZXQuIiwicHJvamVjdF9pZCI6InNhdHNjaGVsLW5vbnByb2QiLCJlbnZpcm9ubWVudCI6Im5vbnByb2QiLCJsYWJlbHMiOnsidGhyZXNob2xkX3BlcmNlbnQiOiIxMDAiLCJidWRnZXRfbmFtZSI6IlNhdHNjaGVsIE5vbnByb2QgLSBNb250aGx5IEJ1ZGdldCBBbGVydCJ9fQ==",
+    "messageId": "demo-001",
+    "publishTime": "2026-04-25T00:00:00Z"
+  },
+  "subscription": "projects/satschel-nonprod/subscriptions/billing-alerts-nonprod-sub"
+}

@@ -1,0 +1,40 @@
+# Deployment-specific overrides for this Cloud Function.
+# Everything you omit is inherited from cloud_alert_hub's bundled defaults — see
+# the root config.example.yaml for the full schema.
+
+app:
+  name: nonprod-budget-alerts
+  environment: nonprod
+  cloud: gcp
+  alerting_enabled: true
+
+# Only the budget feature is on for this deployment. Create a separate
+# function + config.yaml if you want service SLO or security alerts.
+features:
+  budget_alerts:
+    enabled: true
+    thresholds_percent: [50, 70, 90, 100, 110, 120, 130, 140, 150, 200, 250, 300]
+    dedupe_window_seconds: 1800
+    route: finops
+
+notifications:
+  slack:
+    enabled: true
+    webhook_url_env: SLACK_WEBHOOK_URL
+    default_channel: "#GCP-Alerts-Nonprod"
+  email:
+    enabled: false            # flip on once you wire SES / SMTP / etc.
+
+routing:
+  default_route: finops
+  routes:
+    finops:
+      slack_channel: "#GCP-Alerts-Nonprod"
+      email_recipients:
+        - "jayant.sonsurkar@example.com"
+        - "tarun.saini@example.com"
+        - "shubham.nagarwal@example.com"
+
+# Cloud Functions are short-lived; memory dedupe is fine.
+state:
+  backend: memory
