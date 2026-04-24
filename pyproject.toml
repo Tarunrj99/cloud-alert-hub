@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cloud-alert-hub"
-version = "0.2.1"
+version = "0.3.1"
 description = "A cloud-agnostic alerting hub. Ingests billing, SLO, security, and infrastructure events from any cloud and delivers them to Slack and email, driven by a single YAML config."
 readme = "README.md"
 requires-python = ">=3.10"

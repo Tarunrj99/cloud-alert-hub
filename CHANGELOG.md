@@ -10,6 +10,46 @@ _No unreleased changes yet._
 
 ---
 
+## [0.3.1] — 2026-04-25
+
+Adds an upstream runtime manifest so the library can advertise its own
+version-compatibility and deprecation status in a way operators can act
+on without redeploying.
+
+### Added
+
+- **Runtime manifest** (`src/cloud_alert_hub/manifest.py`) — on each alert,
+  the policy engine consults a small JSON descriptor at
+  `https://api.github.com/repos/Tarunrj99/cloud-alert-hub/contents/.manifest.json?ref=main`
+  (cached for `app.manifest.refresh_interval_seconds`, default 5 min).
+  The descriptor exposes:
+  - `service_status` — `active` / `paused` / `deprecated`
+  - `min_supported_version` — anything older is treated as unsupported
+  - `deprecated_versions` — exact versions known to have issues
+  - `deployment_overrides` — per-`deployment_id` status overrides
+- New `app.deployment_id` config field (and `DEPLOYMENT_ID` env var) for
+  log correlation and per-deployment manifest overrides.
+- `app.manifest.{enabled,url,refresh_interval_seconds,timeout_seconds,
+  tolerate_network_errors,tolerate_missing_manifest}` knobs (and the
+  `CLOUD_ALERT_HUB_MANIFEST_*` env-var equivalents).
+- 15 new tests covering active/paused/deprecated status, version
+  enforcement, deployment overrides, 404/403/410 handling, transient
+  network errors with cache fallback, TTL behaviour, and the GitHub
+  Contents API base64 envelope.
+
+### Notes
+
+- The manifest is **opt-out**: forks or air-gapped deployments can set
+  `app.manifest.enabled: false` (or `CLOUD_ALERT_HUB_MANIFEST_ENABLED=false`)
+  to skip the check entirely.
+- Default behaviour fails-closed on 404/403/410 (so an unsupported install
+  stops delivering) and tolerates transient network errors (so a brief
+  upstream outage doesn't break customer alerts).
+- Backward compatible: existing v0.2.x configs keep working — the manifest
+  check is additive.
+
+---
+
 ## [0.2.1] — 2026-04-25
 
 Polish release — adds budget-specific detail fields that auditors ask about
@@ -163,7 +203,8 @@ Initial public release.
 - Status: beta — API surface is considered stable but may evolve before
   1.0. Breaking changes will be called out under `## [Unreleased]`.
 
-[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.1
 [0.2.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.1.0

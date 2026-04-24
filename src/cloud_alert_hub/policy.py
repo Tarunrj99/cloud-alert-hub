@@ -14,6 +14,7 @@ from typing import Any
 
 from .config import Config
 from .features import Feature, load_enabled_features
+from .manifest import check_manifest
 from .models import CanonicalAlert, DeliveryTarget, PolicyDecision
 from .state import BaseState
 
@@ -64,6 +65,25 @@ def evaluate_policy(alert: CanonicalAlert, config: Config, state: BaseState) -> 
             target=DeliveryTarget(),
             should_deliver=False,
             suppressed_reason="global_alerting_disabled",
+            trace=trace,
+        )
+
+    manifest_status = check_manifest(
+        config.manifest,
+        deployment_id=config.deployment_id or None,
+    )
+    trace["manifest"] = {
+        "allow": manifest_status.allow,
+        "source": manifest_status.source,
+        "reason": manifest_status.reason,
+    }
+    if not manifest_status.allow:
+        return PolicyDecision(
+            alert=alert,
+            route_key=config.default_route,
+            target=DeliveryTarget(),
+            should_deliver=False,
+            suppressed_reason=manifest_status.reason or "manifest_check_failed",
             trace=trace,
         )
 

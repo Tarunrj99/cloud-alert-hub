@@ -12,7 +12,11 @@ from cloud_alert_hub import handle_aws_sns, handle_gcp_pubsub, load_config, run
 
 def _dry_run_config(feature: str = "budget_alerts") -> dict:
     return {
-        "app": {"environment": "test", "cloud": "gcp", "alerting_enabled": True, "dry_run": True, "debug_mode": True},
+        "app": {
+            "environment": "test", "cloud": "gcp",
+            "alerting_enabled": True, "dry_run": True, "debug_mode": True,
+            "manifest": {"enabled": False},  # tests must be hermetic — no upstream fetch
+        },
         "features": {feature: {"enabled": True}},
         "notifications": {
             "slack": {"enabled": True, "webhook_url_env": "SLACK_WEBHOOK_URL_TEST", "default_channel": "#test"},

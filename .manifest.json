@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "service_status": "active",
+  "advisory": "cloud-alert-hub library is operational and supported.",
+  "min_supported_version": "0.1.0",
+  "deprecated_versions": [],
+  "deployment_overrides": [],
+  "updated_at": "2026-04-25T00:30:00Z"
+}

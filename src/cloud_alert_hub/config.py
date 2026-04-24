@@ -79,6 +79,10 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         "ALERTING_ENABLED": ("app", "alerting_enabled"),
         "DRY_RUN": ("app", "dry_run"),
         "DEBUG_MODE": ("app", "debug_mode"),
+        "DEPLOYMENT_ID": ("app", "deployment_id"),
+        "CLOUD_ALERT_HUB_MANIFEST_ENABLED": ("app", "manifest", "enabled"),
+        "CLOUD_ALERT_HUB_MANIFEST_URL": ("app", "manifest", "url"),
+        "CLOUD_ALERT_HUB_MANIFEST_REFRESH": ("app", "manifest", "refresh_interval_seconds"),
         "DEFAULT_ROUTE": ("routing", "default_route"),
         "STATE_BACKEND": ("state", "backend"),
         "STATE_FILE_PATH": ("state", "file_path"),
@@ -91,6 +95,8 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         value: Any = raw
         if raw.lower() in {"true", "false"}:
             value = raw.lower() == "true"
+        elif raw.lstrip("-").isdigit():
+            value = int(raw)
         cursor = result
         for key in path[:-1]:
             cursor = cursor.setdefault(key, {})
@@ -139,6 +145,16 @@ class Config:
     @property
     def debug_mode(self) -> bool:
         return bool(self.get("app", "debug_mode", default=False))
+
+    @property
+    def deployment_id(self) -> str:
+        return str(self.get("app", "deployment_id", default="") or "")
+
+    @property
+    def manifest(self) -> dict[str, Any]:
+        """``app.manifest`` sub-tree — runtime compatibility manifest config."""
+        value = self.get("app", "manifest", default={}) or {}
+        return value if isinstance(value, dict) else {}
 
     # ---- features ----------------------------------------------------------
 

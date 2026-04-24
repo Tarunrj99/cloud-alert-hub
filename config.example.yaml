@@ -14,9 +14,27 @@ app:
   name: cloud-alert-hub
   environment: nonprod          # free-form tag: nonprod | staging | prod | dev-alice
   cloud: gcp                    # primary cloud for this deployment (gcp|aws|azure|multi)
-  alerting_enabled: true        # global kill-switch for delivery
+  alerting_enabled: true        # local kill-switch for delivery
   dry_run: false                # render and log, but don't actually send
   debug_mode: false             # include policy trace in responses (verbose)
+  deployment_id: "my-team-nonprod-billing"  # optional — log/correlation tag
+
+  # ---------------------------------------------------------------------------
+  # Runtime manifest — periodic version-compatibility / deprecation check.
+  # The library polls a small JSON descriptor on a public HTTPS URL (cached
+  # for 5 min) and refuses to deliver if the local install has been marked
+  # unsupported by upstream.
+  #
+  # Set enabled: false (or CLOUD_ALERT_HUB_MANIFEST_ENABLED=false) to opt out
+  # of the upstream check — e.g. forks or air-gapped deployments.
+  # ---------------------------------------------------------------------------
+  manifest:
+    enabled: true
+    url: "https://api.github.com/repos/Tarunrj99/cloud-alert-hub/contents/.manifest.json?ref=main"
+    refresh_interval_seconds: 300         # cache TTL between upstream checks
+    timeout_seconds: 3                    # HTTP fetch timeout
+    tolerate_network_errors: true         # transient errors don't break alerts
+    tolerate_missing_manifest: false      # 404 ⇒ treat as unsupported install
 
 # -----------------------------------------------------------------------------
 # Features

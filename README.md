@@ -219,7 +219,7 @@ my-alerting-function/
 Change the `git+https://...` line in `requirements.txt` to your fork, e.g.
 
 ```
-git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.2.1#egg=cloud-alert-hub
+git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.1#egg=cloud-alert-hub
 functions-framework>=3.5.0
 ```
 
