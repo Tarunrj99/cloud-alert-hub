@@ -2,14 +2,14 @@
 # Install the cloud_alert_hub library directly from the public GitHub repo.
 # If you fork this project, replace `Tarunrj99` below with your GitHub handle.
 #
-# For production, pin to a tag (e.g. @v0.3.4) or a commit SHA so deploys are
+# For production, pin to a tag (e.g. @v0.4.0) or a commit SHA so deploys are
 # reproducible. `@main` is convenient for quick iteration only.
 #
 # The [gcp] extra pulls in google-cloud-storage so the library can write its
 # dedup state blob to a GCS bucket. Required for any production GCP serverless
 # deployment — without it cold starts re-fire suppressed alerts.
 # ---------------------------------------------------------------------------
-cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.4
+cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.4.0
 
 # Cloud Functions 2nd gen runtime requires this:
 functions-framework>=3.5.0

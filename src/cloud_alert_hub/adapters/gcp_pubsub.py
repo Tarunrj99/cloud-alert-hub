@@ -284,6 +284,119 @@ def _from_canonical(
     )
 
 
+def _explicit_kind(decoded: dict[str, Any], attrs: dict[str, Any]) -> str | None:
+    """Return an explicit ``kind`` set by the producer, if any.
+
+    Pub/Sub message attributes always win over decoded-data fields because
+    Cloud Monitoring policy *labels* (which become attributes) are the
+    cleanest way to tag a generic monitoring incident as a cost spike.
+    """
+    for source in (attrs, decoded):
+        if isinstance(source, dict):
+            kind = source.get("kind")
+            if isinstance(kind, str) and kind:
+                return kind
+    return None
+
+
+def _from_cost_spike_incident(
+    decoded: dict[str, Any], attrs: dict[str, Any]
+) -> CanonicalAlert:
+    """Convert a Cloud Monitoring incident tagged ``kind=cost_spike`` into the
+    canonical cost-spike model.
+
+    Cloud Monitoring policies don't natively know "cost"; they alert on
+    metrics like ``serviceruntime.googleapis.com/api/request_count``. The
+    operator labels the policy / message so we know it's a *cost-spike*
+    source and we use whatever quantitative bits the incident carries.
+    """
+    incident = decoded.get("incident") or {}
+    policy_name = incident.get("policy_name") or attrs.get("policy_name") or "Cost spike"
+    condition_name = incident.get("condition_name") or attrs.get("condition_name") or ""
+    state = (incident.get("state") or "open").lower()
+
+    # Service name precedence: explicit attribute > resource label > policy
+    service = (
+        attrs.get("service")
+        or (incident.get("resource", {}) or {}).get("labels", {}).get("service")
+        or incident.get("resource_type_display_name")
+        or policy_name
+    )
+
+    title = f"Cost spike — {service}"
+    summary = incident.get("summary") or attrs.get("summary") or (
+        f"Cost / usage spike detected for `{service}` (state={state})."
+    )
+
+    labels: dict[str, str] = {
+        "policy_name": str(policy_name),
+        "condition_name": str(condition_name),
+        "state": str(state),
+        "service": str(service),
+    }
+    # Optional spike-period label (operator can set this on the channel).
+    period = attrs.get("spike_period") or attrs.get("period_start")
+    if period:
+        labels["spike_period"] = str(period)
+
+    metrics: dict[str, float] = {}
+    # Pub/Sub attributes are always strings — coerce numerically.
+    for src_key, dst_key in (
+        ("previous_amount", "previous_amount"),
+        ("current_amount", "current_amount"),
+        ("delta_percent", "delta_percent"),
+    ):
+        for source in (attrs, incident):
+            raw = source.get(src_key) if isinstance(source, dict) else None
+            if raw is not None:
+                try:
+                    metrics[dst_key] = float(raw)
+                    break
+                except (TypeError, ValueError):
+                    pass
+
+    # Final fallback: if Cloud Monitoring sent an `observed_value` and
+    # `threshold_value`, use them as current vs baseline.
+    if "current_amount" not in metrics and isinstance(
+        incident.get("observed_value"), (int, float)
+    ):
+        metrics["current_amount"] = float(incident["observed_value"])
+    if "previous_amount" not in metrics and isinstance(
+        incident.get("threshold_value"), (int, float)
+    ):
+        metrics["previous_amount"] = float(incident["threshold_value"])
+
+    if (
+        "delta_percent" not in metrics
+        and "previous_amount" in metrics
+        and "current_amount" in metrics
+        and metrics["previous_amount"]
+    ):
+        prev, cur = metrics["previous_amount"], metrics["current_amount"]
+        metrics["delta_percent"] = (cur - prev) / prev * 100.0
+
+    severity = "critical" if state == "open" else "info"
+
+    links: dict[str, str] = {}
+    if incident.get("url"):
+        links["Monitoring incident"] = str(incident["url"])
+
+    return CanonicalAlert(
+        cloud="gcp",
+        environment=attrs.get("environment", "unknown"),
+        project=incident.get("scoping_project_id") or attrs.get("project_id"),
+        service=str(service),
+        kind="cost_spike",
+        severity=severity,
+        title=title,
+        summary=summary,
+        labels=labels,
+        metrics=metrics,
+        links=links,
+        source_payload=decoded,
+    )
+
+
 def from_gcp_pubsub(payload: dict[str, Any]) -> CanonicalAlert:
     # Accept either the envelope or the inner message dict directly.
     message = payload.get("message") if isinstance(payload.get("message"), dict) else payload
@@ -293,6 +406,13 @@ def from_gcp_pubsub(payload: dict[str, Any]) -> CanonicalAlert:
 
     if _looks_like_native_budget(decoded):
         return _from_native_budget(decoded, attrs)
+
+    # Explicit ``kind`` overrides shape detection. This is how operators
+    # promote a vanilla Cloud Monitoring incident into a cost_spike.
+    kind_hint = _explicit_kind(decoded, attrs)
+    if kind_hint == "cost_spike" and _looks_like_monitoring_incident(decoded):
+        return _from_cost_spike_incident(decoded, attrs)
+
     if _looks_like_monitoring_incident(decoded):
         return _from_monitoring_incident(decoded, attrs)
     return _from_canonical(decoded, attrs)

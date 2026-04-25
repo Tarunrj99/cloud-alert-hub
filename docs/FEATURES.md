@@ -11,6 +11,7 @@ Features are toggled in `config.yaml`:
 ```yaml
 features:
   budget_alerts:        { enabled: true }
+  cost_spike:           { enabled: true }
   service_slo:          { enabled: false }
   security_audit:       { enabled: true }
   infrastructure_spike: { enabled: false }
@@ -48,6 +49,56 @@ features:
     enabled: true
     thresholds_percent: [50, 70, 90, 100, 110, 120, 150, 200, 300]
     dedupe_window_seconds: 2764800   # 32 days — covers a full billing month
+    route: finops
+  ```
+
+### `cost_spike` — sudden cost / usage surge per service
+
+Budget thresholds (`budget_alerts`) are *level-triggered*: they fire when
+cumulative spend crosses a known step (50 %, 90 %, 100 %, …). They tell
+you **"you have crossed a line you drew"**. Spikes are *delta-triggered*:
+they fire when a service's spend or usage in a given window jumps
+significantly compared to its recent baseline. They tell you
+**"something started behaving abnormally on day X"**.
+
+Both are useful and they're independent. A budget alert may take days to
+fire (the bill has to accumulate), but a spike fires *the moment* an
+abusive client starts hammering an API or a runaway autoscaler scales up.
+
+* **Claims when:** `alert.kind == "cost_spike"`.
+* **Service-agnostic:** the service comes from the payload, so a
+  previously-quiet service that suddenly spikes (think: API key abuse,
+  runaway autoscaler) gets caught with no code change. `service_allowlist`
+  / `service_denylist` carve out scope when needed.
+* **Expects on the payload:**
+  * `alert.service` (or `labels.service`) — the service that spiked.
+  * `metrics.previous_amount`, `metrics.current_amount`, `metrics.delta_percent`
+    (any subset; `delta_percent` is computed automatically when both
+    amounts are present).
+  * `labels.spike_period` — bucket key, e.g. `"2026-04-21"` for a daily
+    detector or `"2026-W17"` for a weekly one.
+* **Dedupe key:**
+  `cloud:project:service:spike_period`. Each (service × period) fires
+  exactly once per `dedupe_window_seconds` (default 1 day).
+* **Severity ladder** (configurable via `severity_thresholds_percent`):
+  delta ≥ 1000 % = critical, ≥ 300 % = high, ≥ 100 % = medium, else low.
+  When no quantitative signal is available, severity defaults to `high`.
+* **How to detect spikes** (no new managed service required) — see
+  [`docs/RECIPES.md`](./RECIPES.md) for end-to-end recipes per cloud:
+  Cloud Monitoring → Pub/Sub on GCP, AWS Cost Anomaly Detection → SNS,
+  Azure Monitor → Action Group, or a BigQuery scheduled query against
+  the billing export.
+* **Config:**
+  ```yaml
+  features.cost_spike:
+    enabled: true
+    severity_thresholds_percent:
+      medium: 100      # +100% over baseline (2× spend)
+      high: 300        # +300% (4× spend)
+      critical: 1000   # +1000% (11× spend)
+    service_allowlist: []          # empty = all services
+    service_denylist:  []          # e.g. ["BigQuery Reservation API"]
+    dedupe_window_seconds: 86400   # one alert per (service × day)
     route: finops
   ```
 

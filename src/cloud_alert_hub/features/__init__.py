@@ -16,12 +16,14 @@ from typing import Iterable
 from ..config import Config
 from .base import Feature, FeatureMatch
 from .budget import BudgetAlertsFeature
+from .cost_spike import CostSpikeFeature
 from .infrastructure import InfrastructureSpikeFeature
 from .security_audit import SecurityAuditFeature
 from .service_slo import ServiceSloFeature
 
 FEATURE_CLASSES: tuple[type[Feature], ...] = (
     BudgetAlertsFeature,
+    CostSpikeFeature,
     ServiceSloFeature,
     SecurityAuditFeature,
     InfrastructureSpikeFeature,

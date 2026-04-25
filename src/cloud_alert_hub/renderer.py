@@ -47,6 +47,7 @@ _SEVERITY_PILL = {
 
 _KIND_EMOJI = {
     "budget": ":moneybag:",
+    "cost_spike": ":chart_with_upwards_trend:",
     "service": ":gear:",
     "security": ":shield:",
     "infrastructure": ":building_construction:",
@@ -61,6 +62,7 @@ _DEFAULT_DISPLAY = {
     "show_summary": True,
     "show_progress_bar": True,
     "show_budget_details": True,          # budget alerts only
+    "show_spike_details": True,           # cost_spike alerts only
     "show_fields": True,
     "show_metrics": True,
     "show_labels": False,  # noisy by default — opt in
@@ -296,6 +298,60 @@ def _budget_details_block(alert: CanonicalAlert) -> dict | None:
     return {"type": "section", "fields": fields[:10]}
 
 
+def _spike_details_block(alert: CanonicalAlert) -> dict | None:
+    """Structured spike-specific metadata: service, baseline → current, delta.
+
+    Only used for ``kind == "cost_spike"``.
+    """
+    if alert.kind != "cost_spike":
+        return None
+
+    labels = alert.labels or {}
+    metrics = alert.metrics or {}
+    currency = (
+        alert.annotations.get("currencyCode")
+        or labels.get("currency")
+        or "USD"
+    )
+
+    fields: list[dict[str, str]] = []
+
+    service = alert.service or labels.get("service")
+    if service:
+        fields.append({"type": "mrkdwn", "text": f"*Service:*\n`{service}`"})
+
+    period = labels.get("spike_period") or labels.get("period_start")
+    if period:
+        fields.append({"type": "mrkdwn", "text": f"*Window:*\n{period}"})
+
+    prev = metrics.get("previous_amount")
+    cur = metrics.get("current_amount")
+    if isinstance(prev, (int, float)):
+        fields.append(
+            {"type": "mrkdwn",
+             "text": f"*Baseline:*\n{_format_currency_amount(prev, currency)}"}
+        )
+    if isinstance(cur, (int, float)):
+        fields.append(
+            {"type": "mrkdwn",
+             "text": f"*Current:*\n{_format_currency_amount(cur, currency)}"}
+        )
+
+    delta = metrics.get("delta_percent")
+    if isinstance(delta, (int, float)):
+        # Plus sign + warning emoji on big jumps for at-a-glance reading.
+        sign = "+" if delta >= 0 else ""
+        flame = " :fire:" if delta >= 1000 else (" :warning:" if delta >= 300 else "")
+        fields.append(
+            {"type": "mrkdwn",
+             "text": f"*Delta:*\n{sign}{delta:,.0f}%{flame}"}
+        )
+
+    if not fields:
+        return None
+    return {"type": "section", "fields": fields[:10]}
+
+
 def _fields_block(alert: CanonicalAlert, display: dict[str, Any]) -> dict | None:
     items: list[tuple[str, str]] = []
     if display["show_cloud"] and alert.cloud:
@@ -426,6 +482,11 @@ def render_slack(
         if bd:
             blocks.append({"type": "divider"})
             blocks.append(bd)
+    if cfg.get("show_spike_details", True):
+        sd = _spike_details_block(alert)
+        if sd:
+            blocks.append({"type": "divider"})
+            blocks.append(sd)
     if cfg["show_fields"]:
         fb = _fields_block(alert, cfg)
         if fb:

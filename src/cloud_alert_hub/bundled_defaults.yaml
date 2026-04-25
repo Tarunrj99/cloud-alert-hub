@@ -53,6 +53,28 @@ features:
     # otherwise cold starts wipe state and re-emissions re-fire.
     dedupe_window_seconds: 2764800
     route: finops
+  cost_spike:
+    # Delta-triggered cost / usage spike alert. Service-agnostic: the service
+    # comes from the payload, so a previously-quiet service that suddenly
+    # spikes (think: API key abuse, runaway autoscaler) gets caught with no
+    # code change. Pair with any spike-detection source that emits a payload
+    # with kind=cost_spike — e.g. a Cloud Monitoring policy on
+    # serviceruntime.googleapis.com/api/request_count, AWS Cost Anomaly
+    # Detection → SNS, or a BigQuery scheduled query against the billing
+    # export. See docs/RECIPES.md for end-to-end recipes per cloud.
+    enabled: false
+    # Severity ladder: percent-over-baseline at which we escalate.
+    severity_thresholds_percent:
+      medium: 100      # +100% over baseline
+      high: 300
+      critical: 1000
+    service_allowlist: []   # empty = match all services
+    service_denylist: []
+    # 1 day — spike alerts are inherently rate-limited by their detection
+    # window. The dedup key is cloud:project:service:spike_period, so each
+    # (service × day) fires once.
+    dedupe_window_seconds: 86400
+    route: finops
   service_slo:
     enabled: false
     error_rate_percent_gte: 3
@@ -79,6 +101,7 @@ notifications:
       show_summary: true
       show_progress_bar: true        # budget alerts only
       show_budget_details: true      # budget alerts only (name / period / remaining)
+      show_spike_details: true       # cost_spike alerts only (baseline / current / delta)
       show_fields: true
       show_metrics: true
       show_labels: false             # chatty — opt in

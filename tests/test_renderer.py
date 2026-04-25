@@ -253,6 +253,59 @@ def test_slack_budget_details_skipped_for_non_budget() -> None:
     assert "Billing period" not in serialised
 
 
+def _spike_alert(**overrides) -> CanonicalAlert:
+    base = {
+        "cloud": "gcp",
+        "environment": "nonprod",
+        "project": "my-nonprod-project",
+        "service": "Generative Language API",
+        "kind": "cost_spike",
+        "severity": "critical",
+        "title": "Cost spike — Generative Language API",
+        "summary": "Generative Language API spend jumped from $48/day to $5,021 today.",
+        "labels": {
+            "service": "Generative Language API",
+            "spike_period": "2026-04-21",
+        },
+        "metrics": {
+            "previous_amount": 48.13,
+            "current_amount": 5021.44,
+            "delta_percent": 10333.0,
+        },
+        "annotations": {"currencyCode": "USD"},
+        "route_key": "finops",
+        "occurred_at": datetime(2026, 4, 25, 9, 0, tzinfo=timezone.utc),
+    }
+    base.update(overrides)
+    return CanonicalAlert(**base)
+
+
+def test_slack_spike_details_block_shows_baseline_current_delta() -> None:
+    msg = render_slack(_spike_alert(), channel="#x")
+    serialised = str(msg.model_dump())
+    assert "Service" in serialised
+    assert "Baseline" in serialised
+    assert "$48.13" in serialised
+    assert "Current" in serialised
+    assert "$5,021.44" in serialised
+    # +10333% should pick up the fire emoji because delta >= 1000
+    assert "+10,333%" in serialised
+    assert "fire" in serialised
+
+
+def test_slack_spike_details_skipped_for_non_spike_kind() -> None:
+    alert = _budget_alert(kind="budget")
+    msg = render_slack(alert, channel="#x")
+    serialised = str(msg.model_dump())
+    assert "Baseline" not in serialised
+
+
+def test_slack_spike_details_hidden_by_toggle() -> None:
+    msg = render_slack(_spike_alert(), channel="#x", display={"show_spike_details": False})
+    serialised = str(msg.model_dump())
+    assert "Baseline" not in serialised
+
+
 def test_email_body_includes_key_fields() -> None:
     alert = _budget_alert()
     msg = render_email(alert, recipients=["qa@example.com"], from_address="bot@example.com")

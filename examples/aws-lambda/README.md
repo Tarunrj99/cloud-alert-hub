@@ -42,7 +42,7 @@ examples/aws-lambda/
 ## 2. Point `requirements.txt` at your fork
 
 Replace `Tarunrj99/cloud-alert-hub` with your own public repo path.
-Pin to a tag (`@v0.3.4`) or commit SHA for reproducible deploys.
+Pin to a tag (`@v0.4.0`) or commit SHA for reproducible deploys.
 
 The shipped requirements line uses the `[aws]` extra
 (`cloud-alert-hub[aws] @ git+…`) which pulls in `boto3` for the S3 dedup

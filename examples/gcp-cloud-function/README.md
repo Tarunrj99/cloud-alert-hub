@@ -79,7 +79,7 @@ cd ~/cloud-alert-hub-deploys/nonprod-budget-alerts
 ### 4. Pin `requirements.txt` to a release tag
 
 ```text
-cloud-alert-hub[gcp] @ git+https://github.com/<you>/cloud-alert-hub.git@v0.3.4
+cloud-alert-hub[gcp] @ git+https://github.com/<you>/cloud-alert-hub.git@v0.4.0
 functions-framework>=3.5.0
 ```
 
@@ -87,7 +87,7 @@ The `[gcp]` extra pulls in `google-cloud-storage` so the function can write
 its persistent dedup state to the GCS bucket created above. Without it cold
 starts re-fire suppressed alerts.
 
-Using `@main` is only good for rapid iteration — pin to a tag (`@v0.3.4`) or
+Using `@main` is only good for rapid iteration — pin to a tag (`@v0.4.0`) or
 a commit SHA for production deploys so redeploys are reproducible.
 
 ### 5. Edit `config.yaml` for your environment

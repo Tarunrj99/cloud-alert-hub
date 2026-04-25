@@ -19,6 +19,30 @@ Typical thresholds to trip: 50, 70, 90, 100, 110, 120, 150, 200, 300
 billing update cadence (GCP Cloud Billing publishes up to every 30 min, so
 1800s is safe).
 
+## Cost / usage spikes — `cost_spike`
+
+Fires when a service's spend or usage in a given window jumps
+significantly compared to its recent baseline. **Independent** from
+`budget_alerts`: budgets are level-triggered (cumulative spend crossed
+a step), spikes are delta-triggered (something broke today). Both are
+useful and orthogonal.
+
+| Cloud | Source → cloud_alert_hub                                                |
+| ----- | ----------------------------------------------------------------------- |
+| GCP   | Cloud Monitoring policy on `serviceruntime.googleapis.com/api/request_count` → Pub/Sub (with `kind=cost_spike` channel label) |
+| GCP   | BigQuery scheduled query on the Cloud Billing export → Pub/Sub          |
+| AWS   | Cost Explorer Cost Anomaly Detection → SNS (`kind=cost_spike` attr)     |
+| Azure | Cost Management anomaly alert → Action Group webhook                    |
+| any   | Custom detector → POST `/ingest/generic`                                |
+
+End-to-end recipes for each path live in [`RECIPES.md`](./RECIPES.md).
+The April 2026 Gemini-key abuse on the reference deployment would have
+been caught by the GCP recipe within an hour.
+
+The dedupe key is `cloud:project:service:spike_period`, so each
+(service × period) fires exactly once. Default window: 1 day. Use
+`service_allowlist` / `service_denylist` to scope.
+
 ## Reliability — `service_slo`
 
 Fires when a service breaches an error-rate or latency SLO.
@@ -66,5 +90,6 @@ separate functions/lambdas for cleaner permissions and blast radius.
 | Pattern | Deployment |
 | ------- | ---------- |
 | FinOps dashboard — budgets only | one function, one topic, `budget_alerts` on |
+| FinOps + spike detection | one function, one topic, `budget_alerts` + `cost_spike` on |
 | SRE dashboard — SLO + infra | one function, one topic, `service_slo` + `infrastructure_spike` on |
 | Security-only | separate function, separate topic, only `security_audit` on |

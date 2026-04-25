@@ -86,7 +86,7 @@ cd ~/my-lambda-alerting
 ## 2. Point `requirements.txt` at your fork
 
 ```
-cloud-alert-hub[aws] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.4
+cloud-alert-hub[aws] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.4.0
 ```
 
 The `[aws]` extra installs `boto3` (used by the S3 state backend). The

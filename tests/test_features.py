@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from cloud_alert_hub.features import (
     BudgetAlertsFeature,
+    CostSpikeFeature,
     InfrastructureSpikeFeature,
     SecurityAuditFeature,
     ServiceSloFeature,
@@ -112,8 +113,116 @@ def test_load_enabled_features_respects_flags() -> None:
                 "service_slo": {"enabled": False},
                 "security_audit": {"enabled": True},
                 "infrastructure_spike": {"enabled": False},
+                "cost_spike": {"enabled": False},
             }
         }
     )
     enabled = {f.name for f in load_enabled_features(cfg)}
     assert enabled == {"budget_alerts", "security_audit"}
+
+
+# ---------------------------------------------------------------------------
+# CostSpikeFeature
+# ---------------------------------------------------------------------------
+
+
+def _spike_alert(**overrides) -> CanonicalAlert:
+    return _alert(
+        kind="cost_spike",
+        service=overrides.pop("service", "Vertex AI"),
+        project=overrides.pop("project", "p"),
+        labels=overrides.pop(
+            "labels",
+            {"spike_period": "2026-04-21"},
+        ),
+        metrics=overrides.pop(
+            "metrics",
+            {"previous_amount": 50.0, "current_amount": 5000.0, "delta_percent": 9900.0},
+        ),
+        **overrides,
+    )
+
+
+def test_cost_spike_feature_claims_only_cost_spike_kind() -> None:
+    feat = CostSpikeFeature({"enabled": True, "route": "finops"})
+    assert feat.claims(_spike_alert())
+    assert not feat.claims(_alert(kind="budget"))
+    assert not feat.claims(_alert(kind="service"))
+
+
+def test_cost_spike_feature_dedupe_key_is_cloud_project_service_period() -> None:
+    feat = CostSpikeFeature({"enabled": True, "route": "finops"})
+    match = feat.match(_spike_alert())
+    assert match.dedupe_key == "gcp:p:Vertex AI:2026-04-21"
+
+
+def test_cost_spike_feature_severity_ladder_uses_delta_percent() -> None:
+    feat = CostSpikeFeature(
+        {
+            "enabled": True,
+            "route": "finops",
+            "severity_thresholds_percent": {"medium": 100, "high": 300, "critical": 1000},
+        }
+    )
+    low = feat.match(_spike_alert(metrics={"delta_percent": 50}))
+    medium = feat.match(_spike_alert(metrics={"delta_percent": 150}))
+    high = feat.match(_spike_alert(metrics={"delta_percent": 500}))
+    crit = feat.match(_spike_alert(metrics={"delta_percent": 5000}))
+    assert (low.severity, medium.severity, high.severity, crit.severity) == (
+        "low",
+        "medium",
+        "high",
+        "critical",
+    )
+
+
+def test_cost_spike_feature_computes_delta_from_previous_and_current() -> None:
+    """No ``delta_percent`` metric, but previous + current present → compute."""
+    feat = CostSpikeFeature({"enabled": True, "route": "finops"})
+    match = feat.match(
+        _spike_alert(metrics={"previous_amount": 100.0, "current_amount": 500.0})
+    )
+    # +400% → high
+    assert match.severity == "high"
+    assert match.extra_trace["delta_percent"] == 400.0
+
+
+def test_cost_spike_feature_unknown_delta_defaults_to_high() -> None:
+    """No quantitative signal anywhere → default high (visible but not critical)."""
+    feat = CostSpikeFeature({"enabled": True, "route": "finops"})
+    match = feat.match(_spike_alert(metrics={}, labels={"spike_period": "2026-04-21"}))
+    assert match.severity == "high"
+    assert match.extra_trace["delta_percent"] is None
+
+
+def test_cost_spike_feature_allowlist_filters_to_named_services() -> None:
+    feat = CostSpikeFeature(
+        {
+            "enabled": True,
+            "route": "finops",
+            "service_allowlist": ["Vertex AI", "Generative Language API"],
+        }
+    )
+    listed = feat.match(_spike_alert(service="Vertex AI"))
+    other = feat.match(_spike_alert(service="Cloud Storage"))
+    # Allowlisted services pass through with their delta-derived severity.
+    assert listed.severity != "info"
+    assert listed.extra_trace["filtered_out"] is False
+    # Non-allowlisted services are downgraded to info.
+    assert other.severity == "info"
+    assert other.extra_trace["filtered_out"] is True
+
+
+def test_cost_spike_feature_denylist_drops_specific_services() -> None:
+    feat = CostSpikeFeature(
+        {
+            "enabled": True,
+            "route": "finops",
+            "service_denylist": ["BigQuery Reservation API"],
+        }
+    )
+    blocked = feat.match(_spike_alert(service="BigQuery Reservation API"))
+    other = feat.match(_spike_alert(service="Vertex AI"))
+    assert blocked.severity == "info"
+    assert blocked.extra_trace["filtered_out"] is True
+    assert other.severity != "info"

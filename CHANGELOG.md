@@ -10,6 +10,81 @@ _No unreleased changes yet._
 
 ---
 
+## [0.4.0] — 2026-04-25
+
+Adds the **`cost_spike`** feature — a service-agnostic, delta-triggered
+alert that fires the moment a service's spend or usage jumps
+significantly versus its baseline. Where `budget_alerts` tells you "you
+have crossed a line you drew" (level-triggered, days late), `cost_spike`
+tells you "something started behaving abnormally on day X"
+(delta-triggered, minutes late).
+
+This is the lesson from the April 2026 Gemini-key incident on the
+reference deployment: the budget did fire, but only after thousands of
+dollars had already been burned. A spike alert would have caught the
+749 000-request day within an hour.
+
+### Added
+
+- **New feature `cost_spike`** (`features/cost_spike.py`)
+  - Claims `alert.kind == "cost_spike"`.
+  - Service-agnostic: the service comes from the payload, so a
+    previously-quiet service that suddenly spikes gets caught with no
+    code change. Optional `service_allowlist` / `service_denylist`
+    knobs scope the feature when needed.
+  - Severity ladder driven by `metrics.delta_percent` (or computed
+    automatically from `previous_amount` / `current_amount`):
+    `critical ≥ 1000%`, `high ≥ 300%`, `medium ≥ 100%`, else `low`.
+  - Dedupe key: `cloud:project:service:spike_period`. Each
+    (service × period) fires exactly once per `dedupe_window_seconds`
+    (default 1 day).
+- **GCP Pub/Sub adapter** now honours an explicit `kind=cost_spike`
+  attribute on Cloud Monitoring incident envelopes — operators promote
+  a vanilla incident into a cost-spike by adding a single label on the
+  Pub/Sub notification channel. The new
+  `_from_cost_spike_incident` handler pulls `current_amount` /
+  `previous_amount` / `delta_percent` out of incident
+  `observed_value` / `threshold_value` automatically and computes the
+  delta.
+- **Slack renderer** — new `cost_spike` kind emoji
+  (`:chart_with_upwards_trend:`) and a dedicated *spike details* section
+  showing **Service / Window / Baseline / Current / Delta** with
+  ⚠️ on +300%+ and 🔥 on +1000%+ jumps. Toggle:
+  `notifications.slack.display.show_spike_details`.
+- **`docs/RECIPES.md`** (new) — five end-to-end detection recipes that
+  use only built-in cloud features (no new managed service):
+  - **Recipe A — GCP Cloud Monitoring policy** on
+    `serviceruntime.googleapis.com/api/request_count` → existing
+    Pub/Sub topic. Catches API-rate spikes (the Gemini-key class of
+    incident) within minutes; zero new infra.
+  - **Recipe B — GCP BigQuery billing export + scheduled query**
+    for true $-per-service deltas.
+  - **Recipe C — AWS Cost Anomaly Detection → SNS**.
+  - **Recipe D — Azure Cost Management anomaly alert → Action
+    Group**.
+  - **Recipe E — bring-your-own detector** posting to
+    `/ingest/generic`.
+- `docs/SCENARIOS.md` cross-links the new feature and recipes.
+
+### Changed
+
+- `bundled_defaults.yaml` and `config.example.yaml` now declare a
+  `cost_spike` section (`enabled: false` by default in the defaults,
+  `enabled: true` in the example).
+- `docs/FEATURES.md` documents the new feature alongside the existing
+  five.
+
+### Compatibility
+
+- Backwards-compatible: existing deployments are unaffected until they
+  set `features.cost_spike.enabled: true` in their own `config.yaml`.
+- The Pub/Sub adapter's monitoring-incident path is unchanged unless
+  the message attribute `kind=cost_spike` is present — so existing
+  Cloud Monitoring policies keep landing as `kind="service"` (the old
+  behaviour).
+
+---
+
 ## [0.3.4] — 2026-04-25
 
 Fixes a long-standing **rendering ambiguity** in budget alerts: when actual
@@ -352,7 +427,8 @@ Initial public release.
 - Status: beta — API surface is considered stable but may evolve before
   1.0. Breaking changes will be called out under `## [Unreleased]`.
 
-[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.4.0
 [0.3.4]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.4
 [0.3.3]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.3
 [0.3.2]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.2

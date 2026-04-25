@@ -102,7 +102,7 @@ def main(event):
 `requirements.txt`:
 
 ```
-cloud-alert-hub[azure] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.4
+cloud-alert-hub[azure] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.4.0
 azure-functions
 ```
 

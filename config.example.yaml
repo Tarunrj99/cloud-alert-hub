@@ -64,6 +64,26 @@ features:
     dedupe_window_seconds: 2764800
     route: finops
 
+  # Cost / usage spike alert. Fires when a service's spend or usage
+  # surges above its baseline — catches things like API-key abuse,
+  # runaway autoscalers, mis-configured cron jobs, etc. *before* the
+  # monthly budget notices. The service comes from the payload, so any
+  # service that suddenly costs money gets caught with no code change.
+  # See docs/RECIPES.md for end-to-end detection recipes per cloud
+  # (Cloud Monitoring policies, AWS Cost Anomaly Detection, BigQuery
+  # scheduled queries — all use built-in cloud features, no new
+  # managed service is required).
+  cost_spike:
+    enabled: true
+    severity_thresholds_percent:
+      medium: 100      # +100% over baseline (2× spend)
+      high: 300        # +300% (4× spend)
+      critical: 1000   # +1000% (11× spend) — the Gemini-key class of incident
+    service_allowlist: []          # empty = match every service
+    service_denylist: []           # e.g. ["BigQuery Reservation API"]
+    dedupe_window_seconds: 86400   # one alert per (service × day)
+    route: finops
+
   service_slo:
     enabled: false
     error_rate_percent_gte: 3
@@ -101,6 +121,7 @@ notifications:
       show_summary:       true      # 1-2 line human summary
       show_progress_bar:  true      # unicode spend bar (budget alerts only)
       show_budget_details: true     # name / amount / period / spent / remaining (budget only)
+      show_spike_details:  true     # service / baseline / current / delta (cost_spike only)
       show_fields:        true      # cloud / env / project / service pills
       show_metrics:       true      # cost_amount, budget_amount, latency, etc.
       show_labels:        false     # raw label dict — noisy; enable if needed

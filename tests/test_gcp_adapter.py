@@ -152,6 +152,53 @@ def test_monitoring_incident_payload_is_parsed() -> None:
     assert "Monitoring incident" in alert.links
 
 
+def test_monitoring_incident_with_kind_attr_becomes_cost_spike() -> None:
+    """Operators promote a vanilla Cloud Monitoring incident into a cost
+    spike by setting ``kind=cost_spike`` on the Pub/Sub message attributes
+    (which become Cloud Monitoring channel labels). The adapter must:
+
+    * Honour the explicit kind override.
+    * Pull a service name from the message attributes.
+    * Convert observed/threshold incident values into ``current_amount`` /
+      ``previous_amount`` metrics so the spike feature gets quantitative
+      severity.
+    """
+    inner = {
+        "incident": {
+            "policy_name": "Generative Language API request rate",
+            "condition_name": "request_count > 5x baseline",
+            "state": "open",
+            "scoping_project_id": "my-prod-project",
+            "summary": "Generative Language API spiked",
+            "observed_value": 749000,
+            "threshold_value": 9300,
+            "url": "https://console.cloud.google.com/monitoring/alerting/incidents/x",
+        },
+    }
+    alert = from_gcp_pubsub(
+        _envelope(
+            inner,
+            {
+                "kind": "cost_spike",
+                "service": "Generative Language API",
+                "spike_period": "2026-04-21",
+                "environment": "nonprod",
+            },
+        )
+    )
+    assert alert.kind == "cost_spike"
+    assert alert.service == "Generative Language API"
+    assert alert.environment == "nonprod"
+    assert alert.project == "my-prod-project"
+    assert alert.metrics["current_amount"] == 749000
+    assert alert.metrics["previous_amount"] == 9300
+    # 749000 vs 9300 baseline ≈ 7953.7% jump (rounds to 7954)
+    assert round(alert.metrics["delta_percent"]) == 7954
+    assert alert.labels["spike_period"] == "2026-04-21"
+    assert "Monitoring incident" in alert.links
+    assert alert.title.startswith("Cost spike")
+
+
 def test_canonical_payload_still_works() -> None:
     inner = {
         "kind": "budget",
