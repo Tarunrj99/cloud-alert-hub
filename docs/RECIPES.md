@@ -1,22 +1,28 @@
-# Cost-spike detection recipes
+# Detection recipes
 
-This page lists end-to-end recipes for wiring `kind=cost_spike` alerts
-into `cloud-alert-hub`. Each recipe uses **only built-in cloud features**
-— no new managed service, no extra licensing.
+This page lists end-to-end recipes for producing canonical alerts that
+`cloud-alert-hub` can claim. Recipes A–E cover the **`cost_spike`**
+feature; Recipes F–G cover **`infrastructure_spike`** and
+**`security_audit`** via Cloud Monitoring policies.
 
-The library doesn't run the spike detector itself; it just renders and
-deduplicates the alert. You pick the detector that fits your cloud and
+Each recipe uses **only built-in cloud features** — no new managed
+service, no extra licensing.
+
+The library doesn't run the detectors itself; it just renders and
+deduplicates the alerts. You pick the detector that fits your cloud and
 your appetite for setup. Most users start with **Recipe A** (zero
 infrastructure) and graduate to **Recipe B** or **C** once they have a
 stronger cost signal.
 
-| Recipe | Cloud | What it catches                | Infra you must add               |
-|--------|-------|--------------------------------|----------------------------------|
-| A      | GCP   | API request-rate spikes        | one Cloud Monitoring policy      |
-| B      | GCP   | True $-per-service spikes      | BigQuery billing export + SQL    |
-| C      | AWS   | Cost anomalies (any service)   | one Cost Anomaly Detection rule  |
-| D      | Azure | Cost anomalies                 | one Cost Management alert        |
-| E      | any   | Custom — your own detector     | a few dozen lines of Python      |
+| Recipe | Cloud | Feature              | What it catches                | Infra you must add               |
+|--------|-------|----------------------|--------------------------------|----------------------------------|
+| A      | GCP   | `cost_spike`         | API request-rate spikes        | one Cloud Monitoring policy      |
+| B      | GCP   | `cost_spike`         | True $-per-service spikes      | BigQuery billing export + SQL    |
+| C      | AWS   | `cost_spike`         | Cost anomalies (any service)   | one Cost Anomaly Detection rule  |
+| D      | Azure | `cost_spike`         | Cost anomalies                 | one Cost Management alert        |
+| E      | any   | `cost_spike`         | Custom — your own detector     | a few dozen lines of Python      |
+| F      | GCP   | `infrastructure_spike` | CPU / mem / network / log volume   | one Cloud Monitoring policy   |
+| G      | GCP   | `security_audit`     | IAM / config / audit-log changes | one log-match Monitoring policy |
 
 > Why this matters: a runaway-API event (rogue API key, leaked credential,
 > mis-configured cron) would be caught by Recipe A within minutes — well
@@ -375,3 +381,149 @@ keep it consistent across recipes so Slack output stays uniform.
 * **Stacking with budgets.** Cost-spike alerts and budget alerts work
   together: spikes catch the *event* in real time, budgets catch the
   *cumulative damage*. Keep both on.
+
+---
+
+## Recipe F — GCP infrastructure spike via Cloud Monitoring
+
+**Idea.** Cloud Monitoring already tracks per-resource counters — GKE
+node count, network egress, container log bytes, log ingestion volume,
+Compute instance count, CPU / memory utilisation. Wire any of these
+policies to the same Pub/Sub topic the function already subscribes to,
+tag the alerting policy with `kind=infrastructure`, and the
+`infrastructure_spike` feature claims the incident automatically.
+
+The library doesn't add a new detector; it just renders and dedupes
+incidents that Cloud Monitoring already produces.
+
+### 1. Enable the feature
+
+```yaml
+features:
+  infrastructure_spike:
+    enabled: true
+    dedupe_window_seconds: 600   # one alert per (metric × threshold) per 10 min
+    route: sre                   # or finops, or whatever route you've defined
+```
+
+### 2. Tag any existing infrastructure policy with `kind=infrastructure`
+
+```bash
+PROJECT_ID=my-nonprod-project
+POLICY="projects/$PROJECT_ID/alertPolicies/0000000000000000000"   # any policy
+CHANNEL="projects/$PROJECT_ID/notificationChannels/.........."   # the cloud-alert-hub Pub/Sub channel
+
+gcloud alpha monitoring policies update "$POLICY" \
+  --update-user-labels=kind=infrastructure,environment=nonprod,managed_by=cloud-alert-hub \
+  --notification-channels="$CHANNEL"
+```
+
+A single command. The policy keeps firing on the same condition as before;
+the only thing that changes is *where* the incident lands and which
+feature claims it.
+
+### 3. What the adapter does with it
+
+The GCP adapter reads `incident.policy_user_labels.kind` and:
+
+- promotes `kind` from the default `"service"` to `"infrastructure"`;
+- copies `incident.metric.type` into `labels.metric` (or falls back to
+  the condition / policy name);
+- copies `incident.threshold_value` into `labels.threshold`;
+- passes through `observed_value` and `threshold_value` as metrics so the
+  Slack message can render the actual numbers;
+- forwards any other operator-supplied user labels (e.g.
+  `service=gke`, `severity_floor=high`) onto the canonical alert.
+
+The dedupe key is then `cloud:project:metric:threshold` — a CPU policy
+firing every five minutes for the same node pool collapses into one
+Slack alert; a *different* metric (network egress, log bytes) gets its
+own alert.
+
+### 4. Reproduce locally
+
+```bash
+python -m cloud_alert_hub.tools.preview_slack \
+    --source gcp \
+    examples/payloads/gcp-infrastructure-spike-monitoring-incident.json | jq -r '.text'
+# → :rotating_light: [CRITICAL] GKE - Node Count Exceeds 20 — GKE node count > 20 over 5 min
+```
+
+The fixture is a faithful Cloud Monitoring envelope; the `data` field is
+base64-encoded JSON. Open it in any JSON viewer to inspect the shape.
+
+---
+
+## Recipe G — GCP security audit via Cloud Monitoring log-match policy
+
+**Idea.** Cloud Logging exposes audit-log entries (`SetIamPolicy`,
+`CreateServiceAccount`, `iam.role.update`, …) as a metric source for
+Cloud Monitoring **log-match** policies. Wire one to the same Pub/Sub
+topic, tag it with `kind=security`, and the `security_audit` feature
+claims the incident.
+
+This is the cheapest way to get IAM-change alerts into Slack: no
+SCC subscription, no Cloud Function of your own, no BigQuery query.
+
+### 1. Enable the feature
+
+```yaml
+features:
+  security_audit:
+    enabled: true
+    dedupe_window_seconds: 60   # IAM changes should not be deduped aggressively
+    route: security             # or whatever route you've defined
+```
+
+### 2. Wire the log-match policy
+
+```bash
+PROJECT_ID=my-nonprod-project
+CHANNEL="projects/$PROJECT_ID/notificationChannels/.........."
+
+gcloud alpha monitoring policies create \
+  --notification-channels="$CHANNEL" \
+  --display-name="Audit — SetIamPolicy" \
+  --user-labels=kind=security,environment=nonprod,managed_by=cloud-alert-hub,resource=iam-role/admin,action=SetIamPolicy \
+  --policy-from-file=- <<'YAML'
+displayName: Audit — SetIamPolicy
+combiner: OR
+conditions:
+  - displayName: "SetIamPolicy executed"
+    conditionMatchedLog:
+      filter: |
+        protoPayload.methodName="SetIamPolicy"
+        protoPayload.serviceName=("cloudresourcemanager.googleapis.com" OR "iam.googleapis.com")
+YAML
+```
+
+The four operator-supplied user labels — `resource`, `action`,
+`principal`, plus `kind` — give the adapter everything it needs to
+populate the dedupe key (`cloud:project:resource:action:principal`)
+without having to parse the audit-log payload.
+
+If you don't pin `resource` / `action` / `principal` on the policy,
+the adapter still works: it falls back to the policy name as
+`resource`, the condition name as `action`, and `"unknown"` as
+`principal`. You will get coarser dedupe in that case (every
+audit-log incident from the same policy collapses).
+
+### 3. Reproduce locally
+
+```bash
+python -m cloud_alert_hub.tools.preview_slack \
+    --source gcp \
+    examples/payloads/gcp-security-audit-monitoring-incident.json | jq -r '.text'
+# → :rotating_light: [CRITICAL] Audit Config Change Detected - SetIamPolicy — Log match condition
+```
+
+### 4. Expected dedupe behaviour
+
+| User labels on the policy                       | Dedupe key inputs                            | Effect                                   |
+|-------------------------------------------------|----------------------------------------------|------------------------------------------|
+| `kind=security` only                            | `policy_name`, `condition_name`, `unknown`    | One alert per policy per dedupe window   |
+| `kind=security, resource=iam-role/admin`        | overrides `resource`                         | One alert per (resource × action)        |
+| `kind=security, resource=…, action=…, principal=…` | all three pinned                          | Per-actor dedupe (recommended)           |
+
+Pin the three label keys on the policy whenever you can, so each
+distinct (who, did-what, on-what) gets its own Slack alert.

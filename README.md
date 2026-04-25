@@ -177,18 +177,21 @@ cloud-alert-hub/
 │   ├── api.py                       ← run(), handle_gcp_pubsub(), …
 │   ├── config.py                    ← YAML + env merge
 │   ├── bundled_defaults.yaml        ← ships with the package (safe defaults)
+│   ├── manifest.py                  ← runtime / version-compat check
 │   ├── models.py                    ← CanonicalAlert + DeliveryTarget
 │   ├── policy.py                    ← feature-driven routing & dedupe
 │   ├── processor.py                 ← render · deliver · retry · dead-letter
 │   ├── renderer.py                  ← Slack Block Kit + email bodies
-│   ├── state.py                     ← in-memory / file-backed dedupe
+│   ├── state.py                     ← in-memory / file / GCS / S3 / Azure-Blob
 │   ├── telemetry.py                 ← counters
 │   ├── deadletter.py                ← .jsonl sink for unrecoverable deliveries
 │   ├── security.py                  ← shared-token auth (local dev only)
 │   ├── adapters/                    ← gcp_pubsub, aws_sns, azure_eventgrid, generic
 │   ├── notifiers/                   ← slack, email
+│   ├── tools/                       ← preview_slack CLI for local rendering
 │   └── features/                    ← each file = one toggleable scenario
 │       ├── budget.py
+│       ├── cost_spike.py
 │       ├── service_slo.py
 │       ├── security_audit.py
 │       └── infrastructure.py
@@ -238,9 +241,12 @@ my-alerting-function/
 Change the `git+https://...` line in `requirements.txt` to your fork, e.g.
 
 ```
-cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.4.0
+cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.4.1
 functions-framework>=3.5.0
 ```
+
+> Replace `v0.4.1` with the release tag you want to pin to. Check
+> [`CHANGELOG.md`](CHANGELOG.md) for the latest tagged version.
 
 The `[gcp]` extra is required if you're deploying to a GCP serverless runtime
 (Cloud Functions / Cloud Run) — see [Per-cloud install extras](#per-cloud-install-extras).
@@ -470,6 +476,7 @@ needs to know about new message types, not new delivery channels.
 | [`QUICKSTART.md`](docs/QUICKSTART.md) | 5-minute end-to-end walkthrough |
 | [`CONFIGURATION.md`](docs/CONFIGURATION.md) | Every config key, with examples |
 | [`FEATURES.md`](docs/FEATURES.md) | Built-in features and how to add more |
+| [`RECIPES.md`](docs/RECIPES.md) | Per-cloud detection recipes (cost spikes, infra, audit) |
 | [`SAMPLE_OUTPUT.md`](docs/SAMPLE_OUTPUT.md) | What a rendered Slack alert looks like, for every severity |
 | [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Design rationale and trade-offs |
 | [`DEPLOY_GCP.md`](docs/DEPLOY_GCP.md) | GCP Cloud Function runbook |

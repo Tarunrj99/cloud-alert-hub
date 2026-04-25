@@ -217,10 +217,30 @@ def _from_native_budget(
     )
 
 
+_RESERVED_USER_LABEL_KEYS = frozenset({"kind", "environment", "project_id"})
+
+
 def _from_monitoring_incident(
     decoded: dict[str, Any], attrs: dict[str, Any]
 ) -> CanonicalAlert:
+    """Convert a Cloud Monitoring incident into a canonical alert.
+
+    Default ``kind`` is ``"service"`` (uptime / SLO style policies). When
+    the operator tags the alerting policy with
+    ``--user-labels=kind=infrastructure`` or ``kind=security``, the
+    incident is promoted to the matching kind so the right feature
+    claims it. The adapter also synthesises the dedupe-key fields each
+    feature needs (``metric`` / ``threshold`` for infra,
+    ``resource`` / ``action`` / ``principal`` for security) from the
+    incident shape, with operator-supplied user labels winning over the
+    heuristics.
+    """
     incident = decoded.get("incident") or {}
+    policy_labels = _incident_user_labels(decoded)
+
+    explicit_kind = _explicit_kind(decoded, attrs)
+    kind = explicit_kind if explicit_kind in {"infrastructure", "security"} else "service"
+
     policy_name = incident.get("policy_name") or "Cloud Monitoring Policy"
     condition_name = incident.get("condition_name") or ""
     state = (incident.get("state") or "open").lower()
@@ -232,7 +252,7 @@ def _from_monitoring_incident(
     title = " ".join(title_parts)
     summary = incident.get("summary") or f"Monitoring incident state={state}."
 
-    labels = {
+    labels: dict[str, str] = {
         "policy_name": str(policy_name),
         "condition_name": str(condition_name),
         "state": str(state),
@@ -242,19 +262,71 @@ def _from_monitoring_incident(
     if incident.get("scoping_project_id"):
         labels["project_id"] = str(incident["scoping_project_id"])
 
+    metrics: dict[str, float] = {}
+    observed = incident.get("observed_value")
+    if isinstance(observed, (int, float)):
+        metrics["observed_value"] = float(observed)
+    threshold_val = incident.get("threshold_value")
+    if isinstance(threshold_val, (int, float)):
+        metrics["threshold_value"] = float(threshold_val)
+
+    # Kind-specific dedupe-key backfill. Without these, the feature's
+    # dedupe key ends up containing "unknown:unknown" and a single
+    # incident's many re-fires (Cloud Monitoring re-publishes every few
+    # minutes while open) all collapse into the same key — but a
+    # legitimate *new* incident won't, so spam is bounded but data is
+    # ambiguous in audit logs. With these populated, each (policy,
+    # threshold) pair gets its own stable dedupe key.
+    if kind == "infrastructure":
+        metric_type = (incident.get("metric") or {}).get("type") if isinstance(
+            incident.get("metric"), dict
+        ) else None
+        labels.setdefault(
+            "metric",
+            str(metric_type or condition_name or policy_name),
+        )
+        if isinstance(threshold_val, (int, float)):
+            labels.setdefault("threshold", str(float(threshold_val)))
+        else:
+            labels.setdefault("threshold", "unknown")
+    elif kind == "security":
+        labels.setdefault("resource", str(policy_name))
+        labels.setdefault("action", str(condition_name) if condition_name else "policy_match")
+        labels.setdefault("principal", "unknown")
+
+    # Operator-supplied user labels beat the heuristics above. We skip
+    # ``kind`` / ``environment`` / ``project_id`` because those are
+    # consumed at the canonical-alert level (not as labels).
+    for k, v in policy_labels.items():
+        if k in _RESERVED_USER_LABEL_KEYS:
+            continue
+        if isinstance(v, str) and v:
+            labels[k] = v
+        elif v is not None:
+            labels[k] = str(v)
+
     links: dict[str, str] = {}
     if incident.get("url"):
         links["Monitoring incident"] = str(incident["url"])
 
     return CanonicalAlert(
         cloud="gcp",
-        environment=attrs.get("environment", "unknown"),
-        project=incident.get("scoping_project_id") or attrs.get("project_id"),
-        kind="service",
+        environment=(
+            attrs.get("environment")
+            or policy_labels.get("environment")
+            or "unknown"
+        ),
+        project=(
+            incident.get("scoping_project_id")
+            or attrs.get("project_id")
+            or policy_labels.get("project_id")
+        ),
+        kind=kind,
         severity=severity,
         title=title,
         summary=summary,
         labels=labels,
+        metrics=metrics,
         links=links,
         source_payload=decoded,
     )

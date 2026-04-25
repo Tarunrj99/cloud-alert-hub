@@ -250,6 +250,155 @@ def test_monitoring_incident_kind_via_policy_user_labels() -> None:
     assert alert.title.startswith("Cost spike")
 
 
+def test_monitoring_incident_kind_infrastructure_routes_via_policy_user_labels() -> None:
+    """Recipe F (Cloud Monitoring infra policy → Pub/Sub) is how operators
+    promote a generic Monitoring incident — CPU > N, GKE nodes > N, network
+    egress > N — into the ``infrastructure_spike`` feature.
+
+    The signal lives entirely in ``incident.policy_user_labels.kind``;
+    Cloud Monitoring does **not** copy notification-channel labels onto
+    Pub/Sub message attributes, so policy userLabels are the only
+    operator-facing knob that survives the wire.
+
+    The adapter must:
+      * Promote ``kind`` from ``"service"`` (default) to ``"infrastructure"``.
+      * Populate ``labels.metric`` and ``labels.threshold`` so the
+        infrastructure_spike feature's dedupe key
+        (``cloud:project:metric:threshold``) is stable across re-fires.
+      * Pass through ``observed_value`` / ``threshold_value`` as metrics
+        the renderer can show.
+    """
+    inner = {
+        "incident": {
+            "incident_id": "cm-infra-1",
+            "policy_name": "GKE - Node Count Exceeds 20",
+            "condition_name": "GKE node count > 20",
+            "state": "open",
+            "scoping_project_id": "my-nonprod-project",
+            "summary": "GKE node count is 25 (threshold 20).",
+            "observed_value": 25.0,
+            "threshold_value": 20.0,
+            "resource": {
+                "type": "k8s_cluster",
+                "labels": {"cluster_name": "my-gke-cluster", "location": "us-central1"},
+            },
+            "metric": {"type": "kubernetes.io/cluster/node_count"},
+            "policy_user_labels": {
+                "kind": "infrastructure",
+                "environment": "nonprod",
+            },
+            "url": "https://console.cloud.google.com/monitoring/alerting/incidents/cm-infra-1",
+        }
+    }
+    alert = from_gcp_pubsub(_envelope(inner, attrs={}))
+
+    assert alert.kind == "infrastructure", "policy_user_labels.kind must promote infra"
+    assert alert.environment == "nonprod"
+    assert alert.project == "my-nonprod-project"
+    # Dedupe-key inputs for InfrastructureSpikeFeature must be present and
+    # deterministic — otherwise every re-fire of a CM policy alert would
+    # produce a fresh dedupe key and spam Slack.
+    assert alert.labels["metric"], "labels.metric must be populated for infra dedupe"
+    assert alert.labels["threshold"] == "20.0"
+    assert alert.metrics["observed_value"] == 25.0
+    assert alert.metrics["threshold_value"] == 20.0
+    assert "Monitoring incident" in alert.links
+    # Title still reflects the human-readable policy name.
+    assert "GKE - Node Count Exceeds 20" in alert.title
+
+
+def test_monitoring_incident_kind_security_routes_via_policy_user_labels() -> None:
+    """Recipe G (Cloud Monitoring log-match policy → Pub/Sub) — same
+    mechanism as infrastructure but for IAM / config / audit log
+    policies. Common example: ``Audit Config Change Detected -
+    SetIamPolicy``.
+
+    The adapter must:
+      * Promote ``kind`` to ``"security"``.
+      * Populate ``labels.resource`` / ``labels.action`` /
+        ``labels.principal`` so the security_audit feature's dedupe key
+        (``cloud:project:resource:action:principal``) survives re-fires.
+        These are derived from the incident shape because GCP's log-match
+        policies don't have observed_value / threshold_value.
+    """
+    inner = {
+        "incident": {
+            "incident_id": "cm-sec-1",
+            "policy_name": "Audit Config Change Detected - SetIamPolicy",
+            "condition_name": "Log match condition",
+            "state": "open",
+            "scoping_project_id": "my-nonprod-project",
+            "summary": "SetIamPolicy executed by user@example.com on iam-role/admin.",
+            "policy_user_labels": {
+                "kind": "security",
+                "environment": "nonprod",
+            },
+            "url": "https://console.cloud.google.com/monitoring/alerting/incidents/cm-sec-1",
+        }
+    }
+    alert = from_gcp_pubsub(_envelope(inner, attrs={}))
+
+    assert alert.kind == "security", "policy_user_labels.kind must promote security"
+    assert alert.environment == "nonprod"
+    assert alert.project == "my-nonprod-project"
+    # All three dedupe-key components for SecurityAuditFeature must exist;
+    # principal can default to "unknown" when the policy didn't set it,
+    # but resource and action must be populated from the incident.
+    assert alert.labels["resource"]
+    assert alert.labels["action"]
+    assert "principal" in alert.labels
+    assert "Monitoring incident" in alert.links
+
+
+def test_monitoring_incident_user_label_overrides_pass_through() -> None:
+    """Operators can pin any dedupe-key field with ``--user-labels=...``
+    so a custom-tuned policy doesn't have to rely on the adapter's
+    heuristics. Anything beyond ``kind / environment / project_id`` must
+    flow through onto ``alert.labels`` so the feature can pick it up.
+    """
+    inner = {
+        "incident": {
+            "policy_name": "iam-changes",
+            "condition_name": "any-iam-change",
+            "state": "open",
+            "scoping_project_id": "my-nonprod-project",
+            "summary": "user X changed role Y",
+            "policy_user_labels": {
+                "kind": "security",
+                "resource": "iam-role/admin",
+                "action": "role_binding_added",
+                "principal": "ci-bot@my-nonprod-project.iam.gserviceaccount.com",
+            },
+        }
+    }
+    alert = from_gcp_pubsub(_envelope(inner, attrs={}))
+
+    assert alert.kind == "security"
+    # Operator-supplied labels must beat heuristics.
+    assert alert.labels["resource"] == "iam-role/admin"
+    assert alert.labels["action"] == "role_binding_added"
+    assert alert.labels["principal"] == "ci-bot@my-nonprod-project.iam.gserviceaccount.com"
+
+
+def test_monitoring_incident_without_kind_label_still_returns_service() -> None:
+    """Backward compatibility: an un-tagged Cloud Monitoring policy keeps
+    the historical behaviour (`kind="service"`). This means existing
+    deployments don't accidentally re-route their incidents when they
+    upgrade the library.
+    """
+    inner = {
+        "incident": {
+            "policy_name": "Error rate too high",
+            "condition_name": "5xx > 5%",
+            "state": "open",
+            "scoping_project_id": "my-prod-project",
+            "summary": "Error rate 12%",
+        }
+    }
+    alert = from_gcp_pubsub(_envelope(inner, attrs={}))
+    assert alert.kind == "service"
+
+
 def test_canonical_payload_still_works() -> None:
     inner = {
         "kind": "budget",

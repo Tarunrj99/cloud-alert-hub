@@ -129,6 +129,13 @@ abusive client starts hammering an API or a runaway autoscaler scales up.
   * `labels.action` (e.g. `role_binding_added`).
   * `labels.principal` (who performed the action).
 * **Dedupe key:** `cloud:project:resource:action:principal`.
+* **GCP source:** wire any Cloud Monitoring log-match policy
+  (e.g. `protoPayload.methodName="SetIamPolicy"`) to the same Pub/Sub
+  topic; tag it with `--user-labels=kind=security,environment=…`
+  and optionally `resource=…,action=…,principal=…`. The adapter
+  promotes `kind` to `"security"` and synthesises the dedupe-key
+  fields from the incident shape if you don't pin them. See
+  [`docs/RECIPES.md`](./RECIPES.md#recipe-g--gcp-security-audit-via-cloud-monitoring-log-match-policy).
 * **Config:**
   ```yaml
   features.security_audit:
@@ -144,6 +151,14 @@ abusive client starts hammering an API or a runaway autoscaler scales up.
   * `labels.metric` (e.g. `cpu_utilization`).
   * `labels.threshold` (e.g. `80`).
 * **Dedupe key:** `cloud:project:metric:threshold`.
+* **GCP source:** wire any Cloud Monitoring infrastructure policy
+  (CPU, memory, GKE node count, network egress, log volume, …) to
+  the same Pub/Sub topic and tag it with
+  `--user-labels=kind=infrastructure,environment=…`. The adapter
+  populates `labels.metric` from `incident.metric.type` and
+  `labels.threshold` from `incident.threshold_value` automatically.
+  See
+  [`docs/RECIPES.md`](./RECIPES.md#recipe-f--gcp-infrastructure-spike-via-cloud-monitoring).
 * **Config:**
   ```yaml
   features.infrastructure_spike:

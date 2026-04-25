@@ -8,6 +8,52 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **GCP adapter: route Cloud Monitoring incidents by `policy_user_labels.kind`.**
+  The adapter previously hardcoded `kind="service"` for every Cloud
+  Monitoring incident, which meant operators had no way to drive
+  `infrastructure_spike` or `security_audit` from a vanilla CM policy
+  — those features only ran for canonical (operator-published)
+  payloads. Now an alerting policy tagged
+  `--user-labels=kind=infrastructure` (or `kind=security`) is routed
+  to the matching feature. Backward-compatible: un-tagged policies
+  still resolve to `kind="service"`.
+  - The adapter also synthesises the dedupe-key fields each feature
+    needs:
+    - `infrastructure_spike` →
+      `labels.metric` from `incident.metric.type` (or condition /
+      policy name) and `labels.threshold` from
+      `incident.threshold_value`.
+    - `security_audit` →
+      `labels.resource` from policy name, `labels.action` from
+      condition name, `labels.principal` defaults to `"unknown"` —
+      all overridable via policy `user_labels`.
+  - Operator-supplied policy `user_labels` (other than the reserved
+    `kind` / `environment` / `project_id`) flow through onto
+    `alert.labels` so a policy tagged
+    `--user-labels=resource=iam-role/admin,action=SetIamPolicy,principal=ci-bot@…`
+    gives perfectly-scoped audit alerts without writing a publisher.
+- **`docs/RECIPES.md`** rewritten as a multi-feature recipe page (was
+  cost-spike-only). Adds:
+  - **Recipe F** — `infrastructure_spike` via Cloud Monitoring (CPU,
+    memory, GKE node count, network egress, log volume, …).
+  - **Recipe G** — `security_audit` via Cloud Monitoring log-match
+    policies (`SetIamPolicy`, role binding changes, audit-log
+    filters).
+  Each new recipe includes the exact `gcloud` invocation, a
+  reproducible local preview command, and a dedupe-behaviour table.
+- **`examples/payloads/gcp-infrastructure-spike-monitoring-incident.json`**
+  and **`examples/payloads/gcp-security-audit-monitoring-incident.json`** —
+  faithful Cloud Monitoring envelopes (base64-encoded inner body) so
+  Recipes F and G can be reproduced offline via
+  `python -m cloud_alert_hub.tools.preview_slack --source gcp <fixture>`.
+  Both fixtures use only documented placeholders. Documentation
+  completeness guard updated to require them.
+- **Three new adapter tests** in `tests/test_gcp_adapter.py`:
+  - `test_monitoring_incident_kind_infrastructure_routes_via_policy_user_labels`
+  - `test_monitoring_incident_kind_security_routes_via_policy_user_labels`
+  - `test_monitoring_incident_user_label_overrides_pass_through`
+  - plus `test_monitoring_incident_without_kind_label_still_returns_service`
+    pinning the backward-compatible default.
 - **`tests/test_repo_hygiene.py`** — public-repo hygiene scanner. A
   parametrised test that walks every tracked file (excluding venv /
   build artefacts / `.git`) and fails the suite if any of the
@@ -63,12 +109,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   — the topic name is only a default that can be overridden via the
   `PUBSUB_TOPIC` env var or `--trigger-topic` flag.
 
+### Changed
+
+- README: layout block now lists `manifest.py`, `cost_spike.py`, and
+  `tools/`; the quick-start `requirements.txt` example pins
+  `@v0.4.1` instead of `@v0.4.0`; the docs index now links
+  `docs/RECIPES.md`. The doc-completeness test enforces the
+  `RECIPES.md` cross-link going forward.
+- `docs/FEATURES.md`: `infrastructure_spike` and `security_audit`
+  sections now point at Recipe F / G as the canonical GCP source,
+  document the kind-promotion mechanism, and explain how dedupe-key
+  fields are populated automatically.
+
 ### Stats
 
-- Test count: **229 tests** (previously 98). New high-value categories:
-  - Documentation completeness: 36 tests
-  - Public-repo hygiene: 92 parametrised file scans + 2 self-tests
-  - End-to-end killswitch: 2 tests
+- Test count: **237 tests** (was 229). Net +8 from this slice:
+  - 4 new GCP adapter routing tests for `policy_user_labels.kind`.
+  - 2 new payload-fixture parametrisations (`gcp-infrastructure-spike-monitoring-incident.json`,
+    `gcp-security-audit-monitoring-incident.json`).
+  - 2 hygiene-scan parametrisations for the new fixtures.
+  All 237 pass; `ruff check .` is clean.
 
 ---
 

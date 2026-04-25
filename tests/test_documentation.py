@@ -143,6 +143,8 @@ REQUIRED_PAYLOAD_FIXTURES = [
     # docs/SAMPLE_OUTPUT.md, so dropping one breaks the docs.
     "gcp-billing-budget-native.json",
     "gcp-cost-spike-monitoring-incident.json",
+    "gcp-infrastructure-spike-monitoring-incident.json",
+    "gcp-security-audit-monitoring-incident.json",
     "gcp-pubsub-envelope.json",
     "aws-sns-event.json",
     "aws-cost-anomaly-sns.json",
