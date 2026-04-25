@@ -199,6 +199,57 @@ def test_monitoring_incident_with_kind_attr_becomes_cost_spike() -> None:
     assert alert.title.startswith("Cost spike")
 
 
+def test_monitoring_incident_kind_via_policy_user_labels() -> None:
+    """Recipe A (Cloud Monitoring policy → Pub/Sub) is the canonical way
+    to wire cost-spike detection on GCP. Cloud Monitoring **does not**
+    propagate notification-channel ``user_labels`` onto Pub/Sub message
+    attributes; instead, the alerting policy's ``userLabels`` end up
+    inside ``incident.policy_user_labels`` of the published JSON body.
+
+    The adapter must read the kind / environment / spike_period from
+    that location too, otherwise operators have no way to mark a generic
+    Monitoring incident as a cost spike without writing a custom
+    publisher.
+    """
+    inner = {
+        "incident": {
+            "incident_id": "cm-incident-7",
+            "policy_name": "Per-service request-rate spike",
+            "condition_name": "request_count > 5x baseline",
+            "state": "open",
+            "scoping_project_id": "my-nonprod-project",
+            "summary": "Generative Language API spiked",
+            "started_at": 1745568000,
+            "observed_value": 212.4,
+            "threshold_value": 20.0,
+            "resource": {
+                "type": "consumed_api",
+                "labels": {"service": "generativelanguage.googleapis.com"},
+            },
+            "policy_user_labels": {
+                "kind": "cost_spike",
+                "environment": "nonprod",
+            },
+            "url": "https://console.cloud.google.com/monitoring/alerting/incidents/cm-incident-7",
+        }
+    }
+    # No ``kind`` attribute on the Pub/Sub message — the only signal is
+    # the policy_user_labels.kind in the body. This is exactly what
+    # Cloud Monitoring sends on the wire.
+    alert = from_gcp_pubsub(_envelope(inner, attrs={}))
+
+    assert alert.kind == "cost_spike", "policy_user_labels.kind must promote the kind"
+    assert alert.environment == "nonprod"
+    assert alert.project == "my-nonprod-project"
+    assert alert.service == "generativelanguage.googleapis.com"
+    assert alert.metrics["current_amount"] == 212.4
+    assert alert.metrics["previous_amount"] == 20.0
+    # Falls back to incident.started_at for the spike period when the
+    # operator didn't set a label explicitly.
+    assert alert.labels["spike_period"], "spike_period must default to the incident date"
+    assert alert.title.startswith("Cost spike")
+
+
 def test_canonical_payload_still_works() -> None:
     inner = {
         "kind": "budget",

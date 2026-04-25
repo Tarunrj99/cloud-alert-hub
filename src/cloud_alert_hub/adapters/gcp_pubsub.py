@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from ..models import CanonicalAlert
@@ -284,18 +284,56 @@ def _from_canonical(
     )
 
 
+def _incident_user_labels(decoded: dict[str, Any]) -> dict[str, Any]:
+    """Pull ``user_labels`` / ``policy_user_labels`` out of a Monitoring incident.
+
+    Cloud Monitoring serialises *both* the alerting-policy's ``userLabels``
+    (under ``incident.policy_user_labels``) **and** the resource's labels
+    (under ``incident.resource.labels``) into the Pub/Sub notification body.
+    Pub/Sub itself does **not** copy a notification channel's ``user_labels``
+    onto the message attributes — so policy user labels are the canonical
+    place operators tag a generic Monitoring incident with metadata like
+    ``kind=cost_spike`` or ``environment=nonprod``.
+
+    Returns an empty dict when the payload doesn't look like a Monitoring
+    incident, so callers can ``.get(...)`` safely.
+    """
+    incident = decoded.get("incident")
+    if not isinstance(incident, dict):
+        return {}
+    merged: dict[str, Any] = {}
+    for key in ("policy_user_labels", "user_labels"):
+        section = incident.get(key)
+        if isinstance(section, dict):
+            for k, v in section.items():
+                if isinstance(k, str) and v is not None:
+                    merged[k] = v
+    return merged
+
+
 def _explicit_kind(decoded: dict[str, Any], attrs: dict[str, Any]) -> str | None:
     """Return an explicit ``kind`` set by the producer, if any.
 
-    Pub/Sub message attributes always win over decoded-data fields because
-    Cloud Monitoring policy *labels* (which become attributes) are the
-    cleanest way to tag a generic monitoring incident as a cost spike.
+    Precedence (highest to lowest):
+        1. Pub/Sub message attributes — used by canonical producers (BigQuery
+           scheduled query, custom detector) that publish directly to the
+           topic and can set arbitrary attributes.
+        2. Top-level ``kind`` on the decoded body — used by canonical
+           producers that don't set Pub/Sub attributes.
+        3. ``incident.policy_user_labels.kind`` — used by Cloud Monitoring
+           alert policies (Recipe A). Operators tag the policy with
+           ``--user-labels=kind=cost_spike`` and Cloud Monitoring includes
+           those labels in every incident notification body.
     """
     for source in (attrs, decoded):
         if isinstance(source, dict):
             kind = source.get("kind")
             if isinstance(kind, str) and kind:
                 return kind
+    policy_labels = _incident_user_labels(decoded)
+    label_kind = policy_labels.get("kind")
+    if isinstance(label_kind, str) and label_kind:
+        return label_kind
     return None
 
 
@@ -311,14 +349,17 @@ def _from_cost_spike_incident(
     source and we use whatever quantitative bits the incident carries.
     """
     incident = decoded.get("incident") or {}
+    policy_labels = _incident_user_labels(decoded)
     policy_name = incident.get("policy_name") or attrs.get("policy_name") or "Cost spike"
     condition_name = incident.get("condition_name") or attrs.get("condition_name") or ""
     state = (incident.get("state") or "open").lower()
 
-    # Service name precedence: explicit attribute > resource label > policy
+    # Service name precedence: explicit attribute > resource label
+    # > policy user_label > resource type display name > policy display name.
     service = (
         attrs.get("service")
         or (incident.get("resource", {}) or {}).get("labels", {}).get("service")
+        or policy_labels.get("service")
         or incident.get("resource_type_display_name")
         or policy_name
     )
@@ -334,8 +375,24 @@ def _from_cost_spike_incident(
         "state": str(state),
         "service": str(service),
     }
-    # Optional spike-period label (operator can set this on the channel).
-    period = attrs.get("spike_period") or attrs.get("period_start")
+    # Optional spike-period label. Operators can set this on the policy
+    # (``--user-labels=spike_period=2026-04-25``) or in the canonical
+    # payload's ``labels`` / Pub/Sub attributes.
+    period = (
+        attrs.get("spike_period")
+        or attrs.get("period_start")
+        or policy_labels.get("spike_period")
+        or policy_labels.get("period_start")
+    )
+    if not period:
+        # Fall back to the date the incident started — keeps the dedupe key
+        # period-aware even when the operator didn't bother setting a label.
+        started = incident.get("started_at")
+        if isinstance(started, (int, float)):
+            try:
+                period = datetime.fromtimestamp(int(started), tz=timezone.utc).strftime("%Y-%m-%d")
+            except (OverflowError, OSError, ValueError):
+                period = None
     if period:
         labels["spike_period"] = str(period)
 
@@ -383,8 +440,16 @@ def _from_cost_spike_incident(
 
     return CanonicalAlert(
         cloud="gcp",
-        environment=attrs.get("environment", "unknown"),
-        project=incident.get("scoping_project_id") or attrs.get("project_id"),
+        environment=(
+            attrs.get("environment")
+            or policy_labels.get("environment")
+            or "unknown"
+        ),
+        project=(
+            incident.get("scoping_project_id")
+            or attrs.get("project_id")
+            or policy_labels.get("project_id")
+        ),
         service=str(service),
         kind="cost_spike",
         severity=severity,

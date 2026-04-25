@@ -6,54 +6,103 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+---
+
+## [0.4.1] — 2026-04-25
+
+Makes **Recipe A wirable from a single `gcloud` command** and ships a
+real **`preview_slack` CLI** so users can see Slack output for any
+feature, locally, before deploying.
+
+The adapter change is the headline: Cloud Monitoring's Pub/Sub
+notification channel does **not** propagate channel ``user_labels`` onto
+Pub/Sub message attributes — the only place an operator can tag an
+alerting policy as a cost-spike source is the policy's ``userLabels``,
+which Cloud Monitoring writes into the incident body under
+``incident.policy_user_labels``. The adapter now reads from that
+location, so a single
+``gcloud alpha monitoring policies create … --user-labels=kind=cost_spike,environment=nonprod``
+is enough to route every incident from that policy through the
+``cost_spike`` feature with the right environment, project, service,
+and spike-period labels.
+
 ### Added
 
-- **`cloud_alert_hub.tools.preview_slack`** — a real CLI (previously a
-  placeholder reference in docs) for rendering the exact Block Kit
-  message the library would post, locally, without sending anything.
-  Works with every adapter (`gcp`, `aws`, `azure`, `generic`) and every
-  feature. Lets reviewers and operators see the output of any alert
-  before deploying.
+- **`cloud_alert_hub.tools.preview_slack`** — first-class CLI (the
+  module reference in docs is no longer a placeholder). Runs the full
+  production pipeline (adapter → enrichment → feature match →
+  renderer) on any payload and prints the exact Block Kit JSON the
+  library would post. Works with every adapter and every feature.
 
   ```bash
   python -m cloud_alert_hub.tools.preview_slack \
       --source generic examples/payloads/generic-cost-spike.json
   ```
 
-- **Per-feature payload fixtures** in `examples/payloads/`:
-  - `gcp-cost-spike-monitoring-incident.json` — Recipe A path
-    (Cloud Monitoring → Pub/Sub with `kind=cost_spike`).
-  - `aws-cost-anomaly-sns.json` — Recipe C path (AWS Cost Anomaly
-    Detection → SNS with `kind=cost_spike`).
-  - `generic-cost-spike.json` — Recipe B/E path (BQ scheduled query
-    or any custom detector).
+- **Per-feature payload fixtures** in `examples/payloads/` (one fixture
+  per (cloud × feature)):
+  - `gcp-cost-spike-monitoring-incident.json` — Recipe A.
+  - `aws-cost-anomaly-sns.json` — Recipe C.
+  - `generic-cost-spike.json` — Recipes B / E (dollar deltas).
   - `generic-service-slo.json`, `generic-security-audit.json`,
     `generic-infrastructure-spike.json` — one fixture per remaining
-    feature so every Slack output in `SAMPLE_OUTPUT.md` is reproducible.
-  - All values are placeholders — no real account IDs, project IDs, or
-    billing IDs ever land in the public repo.
+    feature.
+  - All values are placeholders — no real account / project / billing
+    IDs ever land in the public repo.
+
+- **Adapter helper `_incident_user_labels()`** — merges
+  ``incident.policy_user_labels`` and ``incident.user_labels`` into a
+  single dict so callers can ``.get(...)`` safely.
+
+- **`tests/test_gcp_adapter.py::test_monitoring_incident_kind_via_policy_user_labels`**
+  — asserts a Cloud Monitoring incident with **no Pub/Sub attributes
+  at all** is still recognised as a `cost_spike` when the alerting
+  policy carries ``policy_user_labels.kind = "cost_spike"``, and that
+  ``environment`` / ``project`` / ``service`` / ``spike_period`` are
+  all backfilled correctly.
+
+- **`tests/test_preview_slack.py`** — parametrised smoke test that
+  renders every fixture and asserts well-formed Block Kit output, so
+  the docs cannot drift from reality.
 
 ### Changed
 
-- **`docs/RECIPES.md`** now opens with a **"When does it fire?"**
-  section that explains the detector-cadence vs library-dedup model:
-  the upstream detector decides cadence (e.g. Recipe A re-evaluates
-  every ~5 min), the library guarantees **at most one Slack alert per
-  `(cloud, project, service, spike_period)` per `dedupe_window_seconds`**
-  — so even a 24-hour-long spike produces a single Slack alert per
-  service per day.
-- **`docs/RECIPES.md`** adds an explicit **"Recipe A is service-agnostic
-  by design"** section calling out
-  `groupByFields: ["resource.label.service"]` and explaining that
-  whichever service crosses the threshold gets named in the alert with
-  no code change. The denylist-based opt-out model is documented.
-- **`docs/SAMPLE_OUTPUT.md`** gains real rendered Slack output for
-  every feature (`cost_spike` Recipe A, `cost_spike` Recipe B/E,
-  `cost_spike` Recipe C / AWS Cost Anomaly, `service_slo`,
-  `security_audit`, `infrastructure_spike`) plus a fixture table and a
-  one-liner reproduce command for each.
-- **`README.md`**'s feature table now includes `cost_spike`, marks
-  every feature as `stable`, and points readers at the preview CLI.
+- **`_explicit_kind()`** precedence: (1) Pub/Sub message attributes,
+  (2) decoded body's top-level ``kind``, (3)
+  ``incident.policy_user_labels.kind``. Existing producers (BigQuery
+  scheduled query, AWS SNS, custom Recipe E POSTs) keep their old
+  precedence unchanged.
+- **`_from_cost_spike_incident()`** now reads ``environment``,
+  ``project_id``, ``service``, and ``spike_period`` from
+  ``policy_user_labels`` as a backfill source, and falls back to the
+  incident's ``started_at`` UTC date when no spike-period label is set
+  — so the dedupe key stays period-aware even when the operator
+  doesn't bother adding one.
+- Replaced deprecated `datetime.utcfromtimestamp()` with the
+  timezone-aware `datetime.fromtimestamp(..., tz=timezone.utc)`.
+- **`docs/RECIPES.md`** now opens with a "When does cost_spike fire?"
+  section explaining the detector-cadence vs library-dedup model and
+  guarantees: at most one Slack alert per (service × spike_period)
+  inside `dedupe_window_seconds`, regardless of how often the upstream
+  detector re-fires.
+- **`docs/RECIPES.md`** gains an explicit "Recipe A is service-agnostic
+  by design" section pointing at
+  `groupByFields: ["resource.label.service"]`.
+- **`docs/SAMPLE_OUTPUT.md`** adds real rendered output for every
+  feature (`cost_spike` ×3 recipes, `service_slo`, `security_audit`,
+  `infrastructure_spike`), plus a fixture table and a one-liner
+  reproduce command per sample.
+- **`README.md`**'s feature table now includes `cost_spike`, marks all
+  five features `stable`, and points readers at the preview CLI before
+  they enable anything.
+
+### Compatibility
+
+- Fully backward compatible. Existing canonical-payload producers and
+  Pub/Sub-attribute-based producers continue to work unchanged. Only
+  the zero-attribute, body-only Cloud Monitoring incident path is new.
 
 ---
 
