@@ -15,11 +15,38 @@ examples/aws-lambda/
 * An SNS topic your alert sources publish to (AWS Budgets, CloudWatch alarms,
   EventBridge rules, Security Hub findings, etc.).
 * A Lambda execution role with `AWSLambdaBasicExecutionRole` attached.
+* An S3 bucket for persistent dedup state (a few KB):
+
+  ```bash
+  export ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+  aws s3 mb "s3://${ACCOUNT_ID}-alert-hub-state" --region us-east-1
+  ```
+
+  Then attach this inline policy to the Lambda's execution role so it can
+  read and write its dedup state:
+
+  ```json
+  {
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::ACCOUNT_ID-alert-hub-state/dedup-state.json"
+    }]
+  }
+  ```
+
+  Without persistent state, Lambda cold starts (every ~5–15 min idle) wipe
+  the dedup map and AWS Budgets re-emissions re-fire suppressed alerts.
 
 ## 2. Point `requirements.txt` at your fork
 
 Replace `Tarunrj99/cloud-alert-hub` with your own public repo path.
-Pin to a tag (`@v0.1.0`) or commit SHA for reproducible deploys.
+Pin to a tag (`@v0.3.3`) or commit SHA for reproducible deploys.
+
+The shipped requirements line uses the `[aws]` extra
+(`cloud-alert-hub[aws] @ git+…`) which pulls in `boto3` for the S3 dedup
+backend.
 
 ## 3. Edit `config.yaml`
 

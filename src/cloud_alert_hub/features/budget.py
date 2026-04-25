@@ -24,7 +24,20 @@ class BudgetAlertsFeature(Feature):
     def match(self, alert: CanonicalAlert) -> FeatureMatch:
         threshold = alert.labels.get("threshold_percent", "unknown")
         budget = alert.labels.get("budget_name", alert.project or "unknown")
-        dedupe_key = f"{alert.cloud}:{alert.project or 'unknown'}:{budget}:{threshold}"
+        # ``cost_interval_start`` is the ISO start of the current billing
+        # period (set by the GCP Pub/Sub adapter). Including it scopes the
+        # dedup key to "this threshold this period", so:
+        #
+        #   * Re-emissions of "300% reached" within April are suppressed
+        #     for the entire month, no matter how long the operator's
+        #     ``dedupe_window_seconds`` is set to.
+        #   * On May 1, ``cost_interval_start`` flips to a new value, so
+        #     "50% reached" fires a fresh alert even though the same key
+        #     fired in April.
+        period = alert.labels.get("cost_interval_start", "no_period")
+        dedupe_key = (
+            f"{alert.cloud}:{alert.project or 'unknown'}:{budget}:{period}:{threshold}"
+        )
         return FeatureMatch(
             feature_name=self.name,
             route_key=self.route_key,
@@ -32,7 +45,7 @@ class BudgetAlertsFeature(Feature):
             labels={"category": "cost", "budget_name": budget},
             dedupe_key=dedupe_key,
             dedupe_window_seconds=self.dedupe_window_seconds,
-            extra_trace={"threshold_percent": threshold},
+            extra_trace={"threshold_percent": threshold, "billing_period": period},
         )
 
     @staticmethod

@@ -55,7 +55,33 @@ gcloud pubsub topics create billing-alerts-nonprod
 You'll attach GCP billing budgets (and optionally Cloud Monitoring alert
 policies) to this topic later.
 
-## 3. Copy the example and point at your repo
+## 3. Create the dedup-state bucket (one-time per project)
+
+Cloud Function instances are short-lived (~10–30 min between cold starts),
+but Cloud Billing re-publishes the same threshold message every ~22 minutes
+for the rest of the billing period. Without a persistent dedup store you'd
+get hundreds of duplicate Slack alerts per month.
+
+The library's `gcs` state backend writes a tiny JSON object (~few KB) to a
+bucket you create here:
+
+```bash
+gsutil mb -l "$REGION" "gs://${PROJECT_ID}-alert-hub-state"
+
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+gsutil iam ch \
+  "serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com:roles/storage.objectAdmin" \
+  "gs://${PROJECT_ID}-alert-hub-state"
+```
+
+> Already using a custom Cloud Function service account? Replace the
+> `compute@developer.gserviceaccount.com` member above with that SA email.
+
+This bucket holds *only* the dedup state file; nothing else gets written
+there. It's safe to re-use across multiple Cloud Functions for the same
+project — each one writes its own object key.
+
+## 4. Copy the example and point at your repo
 
 ```bash
 cp -r examples/gcp-cloud-function ~/my-alerting-function
@@ -65,17 +91,22 @@ cd ~/my-alerting-function
 Edit `requirements.txt`:
 
 ```
-git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.2#egg=cloud-alert-hub
+cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.3
 functions-framework>=3.5.0
 ```
+
+The `[gcp]` extra installs `google-cloud-storage`, which the library uses
+to write its dedup state to the bucket created in step 3.
 
 Edit `config.yaml` — at minimum:
 
 * `app.environment` / `app.cloud` tags for your deployment.
 * `features.budget_alerts.enabled: true` (turn off anything you don't want).
 * `routing.routes.finops.slack_channel` + `email_recipients`.
+* `state.bucket` → set to the bucket you created in step 3
+  (`${PROJECT_ID}-alert-hub-state`).
 
-## 4. Deploy
+## 5. Deploy
 
 ```bash
 export PROJECT_ID=your-gcp-project
@@ -96,7 +127,7 @@ gcloud functions deploy "$FUNCTION_NAME" \
   --set-env-vars "SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}"
 ```
 
-## 5. Smoke test
+## 6. Smoke test
 
 ```bash
 gcloud pubsub topics publish "$PUBSUB_TOPIC" --message='{
@@ -116,7 +147,7 @@ Check:
 * Cloud Function logs (`gcloud functions logs read "$FUNCTION_NAME"`) for
   the `cloud_alert_hub:` status line.
 
-## 6. Wire real producers
+## 7. Wire real producers
 
 ### Billing budgets
 
@@ -130,7 +161,7 @@ budget threshold breach.
    **Pub/Sub** channel pointing at your topic.
 2. Attach the channel to any policy you want to route through the function.
 
-## 7. Separation of duties (optional)
+## 8. Separation of duties (optional)
 
 Deploy the same code a second time, pointing at a different topic, with a
 different `config.yaml` that enables only one feature:
@@ -161,7 +192,9 @@ Both functions pull the same GitHub tag; they just ship different configs.
 | Function deploys but never triggers | Pub/Sub trigger permission missing on Eventarc SA | Re-run `deploy.sh`; gcloud adds the bindings automatically on 2nd-gen |
 | Function is invoked but no Slack message appears | `SLACK_WEBHOOK_URL` env var not set, or the channel in `config.yaml` is wrong | `gcloud functions describe $FUNCTION_NAME --gen2` → check env vars |
 | Every alert is suppressed with `no_feature_claimed` | Payload `kind` doesn't match any enabled feature | Enable `app.debug_mode: true` and re-publish; the log shows the decided feature and reason |
-| Duplicate Slack messages for the same event | Pub/Sub at-least-once + no dedupe state | Set `state.backend: file` and mount a writable path, or raise `dedupe_window_seconds` |
+| Duplicate Slack messages for the same event | Pub/Sub re-emits every ~22 min while a budget threshold is exceeded; dedup state lost on Cloud Function cold start | Set `state.backend: gcs` with `state.bucket: ${PROJECT_ID}-alert-hub-state` (see step 3); confirm `dedupe_window_seconds` is large enough to span a billing period (≥ 32 days for monthly budgets) |
+| `pip install` fails resolving `google-cloud-storage` | Forgot the `[gcp]` extra in `requirements.txt` | Use `cloud-alert-hub[gcp] @ git+…` instead of plain `cloud-alert-hub @ git+…` |
+| Function logs `403 Permission denied on bucket` | Cloud Function runtime SA missing `roles/storage.objectAdmin` on the dedup bucket | Re-run the `gsutil iam ch` command from step 3 with the correct SA email |
 | `Permission denied on topic` during `deploy.sh` | Deployer missing `roles/pubsub.admin` | Grant it: `gcloud projects add-iam-policy-binding $PROJECT_ID --member=user:$USER_EMAIL --role=roles/pubsub.admin` |
 
 ## Next steps

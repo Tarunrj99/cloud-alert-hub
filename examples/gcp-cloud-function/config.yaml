@@ -22,7 +22,12 @@ features:
     thresholds_percent: [50, 70, 90, 100, 110, 120, 130, 140, 150,
                          160, 170, 180, 190, 200, 210, 220, 230, 240,
                          250, 260, 270, 280, 290, 300]
-    dedupe_window_seconds: 1800
+    # 32 days — covers a full billing period. The budget feature builds a
+    # period-aware dedup key (includes ``cost_interval_start``), so the same
+    # threshold inside the same month is suppressed for the WHOLE month, but
+    # a fresh month re-fires from 50%. Requires a persistent ``state``
+    # backend (see below) — in-memory state is wiped on every cold start.
+    dedupe_window_seconds: 2764800
     route: finops
   service_slo:          { enabled: false }
   security_audit:       { enabled: false }
@@ -77,6 +82,26 @@ routing:
         - "finops-lead@example.com"
         - "finops-oncall@example.com"
 
-# Cloud Function instances are short-lived; in-memory dedupe is fine.
+# ---------------------------------------------------------------------------
+# Persistent dedup state on Google Cloud Storage.
+#
+# Why this matters: Cloud Function instances are recycled every ~10–30 min,
+# while Cloud Billing re-publishes the same threshold message every ~22 min.
+# An in-memory dedup store would be wiped on every cold start, so each
+# re-emission would fire a duplicate Slack alert (potentially thousands of
+# them per month while spend stays above the highest threshold).
+#
+# The GCS backend writes a tiny JSON object (~few KB) to a bucket you create
+# once. No new GCP service to enable — Cloud Functions already use Cloud
+# Storage to host their source code.
+#
+# Setup:
+#   gsutil mb -l ${REGION:-us-central1} gs://YOUR-PROJECT-alert-hub-state
+#   gsutil iam ch \
+#     serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com:roles/storage.objectAdmin \
+#     gs://YOUR-PROJECT-alert-hub-state
+# ---------------------------------------------------------------------------
 state:
-  backend: memory
+  backend: gcs
+  bucket: YOUR-PROJECT-alert-hub-state
+  object_path: dedup-state.json

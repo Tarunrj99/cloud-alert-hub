@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cloud-alert-hub"
-version = "0.3.2"
+version = "0.3.3"
 description = "A cloud-agnostic alerting hub. Ingests billing, SLO, security, and infrastructure events from any cloud and delivers them to Slack and email, driven by a single YAML config."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +35,24 @@ server = [
   "fastapi>=0.115.0",
   "uvicorn>=0.30.0",
   "python-dotenv>=1.0.1",
+]
+# Persistent dedup state on Google Cloud Storage. Required for production
+# GCP Cloud Functions / Cloud Run deployments (otherwise cold starts wipe
+# in-memory state and re-fire suppressed alerts).
+gcp = [
+  "google-cloud-storage>=2.18.0",
+]
+# Persistent dedup state on AWS S3. Required for production AWS Lambda
+# deployments. boto3 is usually pre-installed on the Lambda runtime — pin
+# explicitly here so local tests and container builds are reproducible.
+aws = [
+  "boto3>=1.34.0",
+]
+# Persistent dedup state on Azure Blob Storage. Required for production
+# Azure Functions / Container Apps deployments.
+azure = [
+  "azure-storage-blob>=12.20.0",
+  "azure-identity>=1.17.0",
 ]
 # Everything needed to develop on the library itself.
 dev = [

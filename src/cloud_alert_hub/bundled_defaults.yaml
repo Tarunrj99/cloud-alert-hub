@@ -46,7 +46,12 @@ features:
   budget_alerts:
     enabled: false
     thresholds_percent: [50, 70, 90, 100]
-    dedupe_window_seconds: 1800
+    # 32 days — covers a full billing period. Combined with the period-aware
+    # dedup key the budget feature builds (cloud:project:budget:period:
+    # threshold), each (threshold, billing-month) pair alerts exactly once.
+    # Requires a persistent state backend (gcs/s3/azure_blob) on serverless;
+    # otherwise cold starts wipe state and re-emissions re-fire.
+    dedupe_window_seconds: 2764800
     route: finops
   service_slo:
     enabled: false
@@ -119,9 +124,38 @@ delivery:
   retry_backoff_seconds: [2, 5, 10]
   timeout_seconds: 8
 
+# ----------------------------------------------------------------------------
+# Dedup state backend
+# ----------------------------------------------------------------------------
+# Backends:
+#   memory      — in-process dict. Fine for local dev. NOT safe for serverless
+#                 (cold starts wipe state, so re-emitted alerts re-fire).
+#   file        — JSON file on local disk. Good for long-lived containers
+#                 (Cloud Run min_instances>=1, k8s pods).
+#   gcs         — Google Cloud Storage. Recommended for GCP Cloud Functions /
+#                 Cloud Run. Optional install: cloud-alert-hub[gcp]
+#                 Required: state.bucket
+#   s3          — AWS S3. Recommended for AWS Lambda / ECS / EKS.
+#                 Optional install: cloud-alert-hub[aws]
+#                 Required: state.bucket
+#   azure_blob  — Azure Blob Storage. Recommended for Azure Functions.
+#                 Optional install: cloud-alert-hub[azure]
+#                 Required: state.account_name and state.container
+#
+# All cloud backends use optimistic-concurrency writes and garbage-collect
+# expired entries automatically (after 2x dedupe_window_seconds).
 state:
   backend: memory
   file_path: /tmp/cloud-alert-hub-dedupe.json
+  # Object-store backends (gcs / s3):
+  # bucket: my-alert-hub-state
+  # object_path: dedup-state.json
+  # region: us-east-1                     # s3 only; auto-resolved otherwise
+  # Azure Blob backend:
+  # account_name: mystorageacct
+  # container: alert-hub-state
+  # blob_name: dedup-state.json
+  # connection_string_env: AZURE_STORAGE_CONNECTION_STRING   # optional
 
 payload_overrides:
   enabled: true

@@ -111,6 +111,25 @@ Declared in [`pyproject.toml`](pyproject.toml):
 * Local dev server (`[server]` / `[dev]` extras): `fastapi`, `uvicorn`,
   `python-dotenv`.
 
+### Per-cloud install extras
+
+The cloud-native dedup state backends are optional extras — only install the
+one matching your runtime. **Strongly recommended for any serverless
+deployment** (without it, cold starts wipe in-memory dedup state and you'll
+get duplicate Slack alerts every ~22 minutes for the rest of the billing
+period).
+
+```bash
+pip install 'cloud-alert-hub[gcp]'    # google-cloud-storage  → GCSState
+pip install 'cloud-alert-hub[aws]'    # boto3                  → S3State
+pip install 'cloud-alert-hub[azure]'  # azure-storage-blob +   → AzureBlobState
+                                      # azure-identity
+```
+
+In every cloud, the library writes a tiny JSON object (~few KB) into a
+bucket / container you already control. No new managed service is added to
+the alerting stack.
+
 ---
 
 ## Architecture at a glance
@@ -219,9 +238,12 @@ my-alerting-function/
 Change the `git+https://...` line in `requirements.txt` to your fork, e.g.
 
 ```
-git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.2#egg=cloud-alert-hub
+cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.3
 functions-framework>=3.5.0
 ```
+
+The `[gcp]` extra is required if you're deploying to a GCP serverless runtime
+(Cloud Functions / Cloud Run) — see [Per-cloud install extras](#per-cloud-install-extras).
 
 ### 3. Set one secret
 
@@ -270,7 +292,7 @@ features:         # enabled/disabled per scenario (budget, slo, security, …)
 notifications:    # Slack + email backends (secrets via env vars)
 routing:          # named routes (channel + recipient lists)
 delivery:         # retries, backoff, timeout
-state:            # dedupe backend (memory or file)
+state:            # dedupe backend: memory | file | gcs | s3 | azure_blob
 payload_overrides:# what the event is allowed to override at runtime
 ingress_auth:     # local-dev server only
 ```
@@ -306,12 +328,12 @@ Add your own in ~40 lines of Python — see [Extending](#extending).
 
 ## Deployment recipes
 
-| Cloud | Runtime | Trigger | Folder | Doc |
-| ----- | ------- | ------- | ------ | --- |
-| GCP   | Cloud Function (2nd gen) | Pub/Sub | [`examples/gcp-cloud-function/`](examples/gcp-cloud-function/) | [`DEPLOY_GCP.md`](docs/DEPLOY_GCP.md) |
-| AWS   | Lambda | SNS | [`examples/aws-lambda/`](examples/aws-lambda/) | [`DEPLOY_AWS.md`](docs/DEPLOY_AWS.md) |
-| Azure | Function | Event Grid | pattern identical to AWS example; see the adapter | — |
-| Local | FastAPI | HTTP | [`examples/local-dev/`](examples/local-dev/) | [`docs/DEBUG_RUNBOOK.md`](docs/DEBUG_RUNBOOK.md) |
+| Cloud | Runtime | Trigger | Persistent dedup | Folder | Doc |
+| ----- | ------- | ------- | ---------------- | ------ | --- |
+| GCP   | Cloud Function (2nd gen) | Pub/Sub | GCS (`[gcp]` extra) | [`examples/gcp-cloud-function/`](examples/gcp-cloud-function/) | [`DEPLOY_GCP.md`](docs/DEPLOY_GCP.md) |
+| AWS   | Lambda | SNS | S3 (`[aws]` extra) | [`examples/aws-lambda/`](examples/aws-lambda/) | [`DEPLOY_AWS.md`](docs/DEPLOY_AWS.md) |
+| Azure | Function | Event Grid | Azure Blob (`[azure]` extra) | pattern identical to AWS example; see the adapter | [`DEPLOY_AZURE.md`](docs/DEPLOY_AZURE.md) |
+| Local | FastAPI | HTTP | in-memory or `file` | [`examples/local-dev/`](examples/local-dev/) | [`docs/DEBUG_RUNBOOK.md`](docs/DEBUG_RUNBOOK.md) |
 
 Every recipe has the same shape: wrapper + `requirements.txt` + `config.yaml`
 + `deploy.sh`. The wrapper is never more than ~10 lines.
@@ -442,6 +464,7 @@ needs to know about new message types, not new delivery channels.
 | [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Design rationale and trade-offs |
 | [`DEPLOY_GCP.md`](docs/DEPLOY_GCP.md) | GCP Cloud Function runbook |
 | [`DEPLOY_AWS.md`](docs/DEPLOY_AWS.md) | AWS Lambda runbook |
+| [`DEPLOY_AZURE.md`](docs/DEPLOY_AZURE.md) | Azure Function runbook |
 | [`DEBUG_RUNBOOK.md`](docs/DEBUG_RUNBOOK.md) | Debug mode + investigation checklist + smoke-test recipes |
 | [`SCENARIOS.md`](docs/SCENARIOS.md) | Catalog of supported alert scenarios |
 | [`examples/README.md`](examples/README.md) | Index of deployment starters |

@@ -33,6 +33,56 @@ def test_budget_feature_severity_ladder() -> None:
     assert "b" in low.dedupe_key
 
 
+def test_budget_feature_dedupe_key_includes_billing_period() -> None:
+    """Same threshold, different billing period → different dedup key.
+
+    This is what prevents Slack noise: April's 300% alert is suppressed for
+    all of April, but May 1's 50% alert fires fresh because the period
+    component changed.
+    """
+    feat = BudgetAlertsFeature({"enabled": True, "route": "finops", "dedupe_window_seconds": 60})
+
+    april = feat.match(
+        _alert(
+            kind="budget",
+            project="p",
+            labels={
+                "threshold_percent": "300",
+                "budget_name": "B",
+                "cost_interval_start": "2026-04-01T00:00:00Z",
+            },
+        )
+    )
+    may = feat.match(
+        _alert(
+            kind="budget",
+            project="p",
+            labels={
+                "threshold_percent": "300",
+                "budget_name": "B",
+                "cost_interval_start": "2026-05-01T00:00:00Z",
+            },
+        )
+    )
+    assert april.dedupe_key != may.dedupe_key
+    assert "2026-04-01T00:00:00Z" in april.dedupe_key
+    assert "2026-05-01T00:00:00Z" in may.dedupe_key
+    assert april.extra_trace["billing_period"] == "2026-04-01T00:00:00Z"
+
+
+def test_budget_feature_dedupe_key_falls_back_when_period_missing() -> None:
+    """Older payloads (or non-GCP sources) may lack ``cost_interval_start``.
+
+    The dedup key must still be deterministic — we use a sentinel marker so
+    the key is well-formed and dedup works within a single process.
+    """
+    feat = BudgetAlertsFeature({"enabled": True, "route": "finops", "dedupe_window_seconds": 60})
+    match = feat.match(
+        _alert(kind="budget", project="p", labels={"threshold_percent": "100", "budget_name": "B"})
+    )
+    assert "no_period" in match.dedupe_key
+
+
 def test_service_slo_feature_breach_detail() -> None:
     feat = ServiceSloFeature(
         {"enabled": True, "route": "sre", "dedupe_window_seconds": 60, "error_rate_percent_gte": 3, "latency_p95_ms_gte": 500}

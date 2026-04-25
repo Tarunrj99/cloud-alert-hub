@@ -40,6 +40,20 @@ gcloud services enable \
 
 # Create the Pub/Sub topic Cloud Billing will publish to
 gcloud pubsub topics create billing-alerts-nonprod --project="$PROJECT_ID"
+
+# Create the GCS bucket the Cloud Function will use for persistent dedup
+# state. Without this, cold starts wipe in-memory dedup state and the same
+# threshold re-fires every ~22 minutes for the rest of the billing month.
+gsutil mb -l "${REGION:-us-central1}" \
+  "gs://${PROJECT_ID}-alert-hub-state"
+
+# Grant the Cloud Function's runtime service account write access. Cloud
+# Functions 2nd gen defaults to the Compute Engine default SA — replace with
+# a dedicated SA if you've created one.
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+gsutil iam ch \
+  "serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com:roles/storage.objectAdmin" \
+  "gs://${PROJECT_ID}-alert-hub-state"
 ```
 
 ### 2. Create the Slack incoming webhook
@@ -65,11 +79,15 @@ cd ~/cloud-alert-hub-deploys/nonprod-budget-alerts
 ### 4. Pin `requirements.txt` to a release tag
 
 ```text
-git+https://github.com/<you>/cloud-alert-hub.git@v0.3.2#egg=cloud-alert-hub
+cloud-alert-hub[gcp] @ git+https://github.com/<you>/cloud-alert-hub.git@v0.3.3
 functions-framework>=3.5.0
 ```
 
-Using `@main` is only good for rapid iteration — pin to a tag (`@v0.3.2`) or
+The `[gcp]` extra pulls in `google-cloud-storage` so the function can write
+its persistent dedup state to the GCS bucket created above. Without it cold
+starts re-fire suppressed alerts.
+
+Using `@main` is only good for rapid iteration — pin to a tag (`@v0.3.3`) or
 a commit SHA for production deploys so redeploys are reproducible.
 
 ### 5. Edit `config.yaml` for your environment
@@ -110,6 +128,14 @@ routing:
     finops:
       slack_channel: "#alerts-finops"
       email_recipients: ["finops-oncall@example.com"]
+
+# Persistent dedup state — replace YOUR-PROJECT with the bucket created in
+# step 1. The library writes a small JSON object here; no other resources
+# go in this bucket.
+state:
+  backend: gcs
+  bucket: YOUR-PROJECT-alert-hub-state
+  object_path: dedup-state.json
 ```
 
 ### 6. Deploy

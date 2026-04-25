@@ -66,9 +66,30 @@ only place that knows about concrete features.
 
 ### `BaseState` (state.py)
 
-Deduplication contract: `should_suppress(key, window_seconds) → bool`. Two
-built-in backends (in-memory for stateless runtimes, file for servers); add
-Redis / Firestore / DynamoDB by subclassing.
+Deduplication contract: `should_suppress(key, window_seconds) → bool`. The
+library ships **five** backends — pick the one matching your runtime:
+
+| Backend | Best for | Notes |
+| ------- | -------- | ----- |
+| `InMemoryState` | local dev, unit tests | resets per process |
+| `FileState` | long-lived containers, FastAPI dev server | JSON file on disk |
+| `GCSState` | GCP Cloud Functions / Cloud Run | optional `cloud-alert-hub[gcp]` install |
+| `S3State` | AWS Lambda / ECS / EKS | optional `cloud-alert-hub[aws]` install |
+| `AzureBlobState` | Azure Functions | optional `cloud-alert-hub[azure]` install |
+
+The cloud-native backends share a common base (`_ObjectStoreState`) that
+handles JSON encoding, expiry GC, and an optimistic-concurrency retry loop.
+Sub-classes implement just three thin methods (`_load_blob`, `_store_blob`,
+`_locator`), so adding a Redis or DynamoDB backend is ~30 lines.
+
+#### Why object storage and not a database
+
+Every serverless platform already implicitly uses its cloud's object store
+(GCS / S3 / Azure Blob) for code packaging. Re-using the same primitive for
+dedup state means **no new managed service** is added to the alerting stack
+in any cloud. Cost rounds to zero (a few KB of state, a few requests per
+hour). This is the same pattern Terraform, Pulumi, dbt, and Airflow use for
+multi-cloud state.
 
 ### `AlertProcessor` (processor.py)
 
@@ -125,9 +146,10 @@ tests; it deliberately shares no runtime state with production deployments.
 
 ## Trade-offs and deferred work
 
-* **State backends.** File-based dedupe is fine for a single-replica server
-  but not for horizontally scaled workers. Redis / Firestore backends are
-  straightforward to add behind `BaseState`.
+* **State backends.** Five backends ship today (memory, file, GCS, S3, Azure
+  Blob); cloud-native object stores cover serverless cold-start scenarios
+  natively. Redis / DynamoDB / Firestore variants are straightforward to add
+  behind `_ObjectStoreState`.
 * **Email providers.** Only `stdout` is wired up; real SES / SendGrid / SMTP
   integrations are one small function each in `notifiers/email.py`.
 * **Schema evolution.** Config is validated leniently (missing keys fall

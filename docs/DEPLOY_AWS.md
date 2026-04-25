@@ -47,6 +47,26 @@ aws iam create-role --role-name cloud-alert-hub-lambda \
 
 aws iam attach-role-policy --role-name cloud-alert-hub-lambda \
   --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+# --- Persistent dedup state on S3 -------------------------------------
+# Lambda containers are recycled every ~5–15 min idle, but AWS Budgets
+# re-emits the same threshold message regularly. Without persistent dedup
+# state, every cold start re-fires already-suppressed alerts. The library's
+# `s3` state backend writes a tiny JSON object (~few KB) to a bucket you
+# create here — no other resources go in this bucket.
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+aws s3 mb "s3://${ACCOUNT_ID}-alert-hub-state" --region "$AWS_REGION"
+
+aws iam put-role-policy --role-name cloud-alert-hub-lambda \
+  --policy-name AlertHubDedupStateAccess \
+  --policy-document "{
+    \"Version\":\"2012-10-17\",
+    \"Statement\":[{
+      \"Effect\":\"Allow\",
+      \"Action\":[\"s3:GetObject\",\"s3:PutObject\"],
+      \"Resource\":\"arn:aws:s3:::${ACCOUNT_ID}-alert-hub-state/dedup-state.json\"
+    }]
+  }"
 ```
 
 Capture the two ARNs you'll need below:
@@ -66,13 +86,21 @@ cd ~/my-lambda-alerting
 ## 2. Point `requirements.txt` at your fork
 
 ```
-git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.2#egg=cloud-alert-hub
+cloud-alert-hub[aws] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.3
 ```
+
+The `[aws]` extra installs `boto3` (used by the S3 state backend). The
+Lambda runtime ships boto3 too, but pinning here keeps local tests and
+container builds reproducible.
 
 ## 3. Edit `config.yaml`
 
 Pick which features this Lambda handles. Set `routing.routes.*.slack_channel`
 to real channel names and — if email is on — add recipients.
+
+Set `state.bucket` to the bucket you created in step 0
+(`${ACCOUNT_ID}-alert-hub-state`). Without it Lambda cold starts will
+re-fire every suppressed alert.
 
 ## 4. Deploy
 
@@ -131,6 +159,8 @@ multiple functions share it.
 | Function runs but nothing in Slack | `SLACK_WEBHOOK_URL` env var missing | `aws lambda get-function-configuration --function-name $FUNCTION_NAME` |
 | SNS → Lambda plumbing not wired | `AddPermission` step skipped | Re-run `deploy.sh`; it's idempotent |
 | Events always suppressed | Payload `kind` doesn't match any enabled feature | Enable `app.debug_mode: true`; CloudWatch Logs will include `debug.trace` with the reason |
+| Duplicate Slack messages for the same threshold | AWS Budgets re-emits + dedup state lost on Lambda cold start | Set `state.backend: s3` with `state.bucket: ${ACCOUNT_ID}-alert-hub-state`; verify execution role has `s3:GetObject` + `s3:PutObject` on `dedup-state.json` |
+| `botocore.exceptions.ClientError: An error occurred (AccessDenied)` reading or writing dedup state | Execution role missing the `AlertHubDedupStateAccess` inline policy | Re-run the `aws iam put-role-policy` command from step 0 |
 | Zip > 50 MB | Heavy extras pulled in | Move `cloud_alert_hub` into a Lambda Layer; only ship the thin wrapper + `config.yaml` |
 
 ## Next steps

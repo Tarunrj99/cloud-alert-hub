@@ -55,7 +55,13 @@ features:
   budget_alerts:
     enabled: true
     thresholds_percent: [50, 70, 90, 100, 110, 120, 130, 140, 150, 200, 250, 300]
-    dedupe_window_seconds: 1800
+    # 32 days. Cloud Billing re-publishes the same threshold message every
+    # ~22 minutes for the rest of the billing period; a long window combined
+    # with a period-aware dedup key (which the budget feature builds from
+    # ``cost_interval_start``) means each (threshold, billing-month) pair
+    # alerts exactly once. ALSO requires a persistent ``state.backend``
+    # below — in-memory state is wiped on every Cloud Function cold start.
+    dedupe_window_seconds: 2764800
     route: finops
 
   service_slo:
@@ -158,12 +164,46 @@ delivery:
 # -----------------------------------------------------------------------------
 # State — deduplication storage
 # -----------------------------------------------------------------------------
-# "memory"   : fine for Cloud Functions / Lambdas (short-lived; dedup at source)
-# "file"     : for long-running servers that need persistence across requests
+# Why does this matter? Native cloud billing pipelines (GCP Cloud Billing,
+# AWS Budgets) re-emit the same threshold message every ~20-30 minutes for the
+# rest of the billing period. Without persistent dedup state, a serverless
+# function will re-fire the same Slack/email alert thousands of times.
+#
+# Backends:
+#   memory      → in-process. Resets on cold start. OK for unit tests and
+#                 single-process local dev only.
+#   file        → JSON file on disk. Use for long-lived containers
+#                 (Cloud Run min_instances>=1, k8s, VMs).
+#   gcs         → Google Cloud Storage. Recommended for GCP serverless.
+#                 Install: pip install 'cloud-alert-hub[gcp]'
+#   s3          → AWS S3. Recommended for AWS Lambda.
+#                 Install: pip install 'cloud-alert-hub[aws]'
+#   azure_blob  → Azure Blob Storage. Recommended for Azure Functions.
+#                 Install: pip install 'cloud-alert-hub[azure]'
+#
+# Pick exactly one. The cloud-native backends use a tiny JSON object (a few
+# KB) in a bucket you already control — no new GCP/AWS/Azure service to enable.
 # -----------------------------------------------------------------------------
 state:
-  backend: memory
-  file_path: /tmp/cloud-alert-hub-dedupe.json
+  backend: memory                # memory | file | gcs | s3 | azure_blob
+  file_path: /tmp/cloud-alert-hub-dedupe.json   # only when backend=file
+
+  # ---- GCS (Google Cloud Storage) -----------------------------------------
+  # bucket: my-alert-hub-state
+  # object_path: dedup-state.json
+
+  # ---- S3 (Amazon Web Services) -------------------------------------------
+  # bucket: my-alert-hub-state
+  # object_path: dedup-state.json
+  # region: us-east-1               # optional; auto-resolved from boto3 chain
+
+  # ---- Azure Blob Storage --------------------------------------------------
+  # account_name: mystorageacct
+  # container: alert-hub-state
+  # blob_name: dedup-state.json
+  # connection_string_env: AZURE_STORAGE_CONNECTION_STRING   # optional;
+  #                                                          # else uses
+  #                                                          # managed identity
 
 # -----------------------------------------------------------------------------
 # Payload overrides — let the incoming event override these safe keys. Keep the

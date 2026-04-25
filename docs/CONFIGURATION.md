@@ -100,10 +100,44 @@ After all retries fail, the event is written to the dead-letter file
 
 ## `state`
 
+The dedup state store. **Critical** for any serverless deployment that
+receives a cloud-billing pipeline (GCP Cloud Billing, AWS Budgets, Azure Cost
+Management): those producers re-emit the same threshold message every
+~22 minutes for the rest of the billing period. Without persistent state,
+each cold-start re-fires the alerts you already delivered.
+
+The library ships **five** backends (one is in-process, three are cloud-
+native, one is local-disk). Pick the one matching your runtime:
+
+| Backend | Survives cold start? | Optional install | Required keys |
+| ------- | -------------------- | ----------------- | ------------- |
+| `memory` | ❌ | none | — |
+| `file` | only on warm container | none | `state.file_path` |
+| `gcs` | ✅ | `pip install 'cloud-alert-hub[gcp]'` | `state.bucket` |
+| `s3` | ✅ | `pip install 'cloud-alert-hub[aws]'` | `state.bucket` |
+| `azure_blob` | ✅ | `pip install 'cloud-alert-hub[azure]'` | `state.account_name`, `state.container` |
+
 | Key | Default | Env override | Notes |
 | --- | ------- | ------------ | ----- |
-| `state.backend` | `memory` | `STATE_BACKEND` | `memory \| file`. Use `memory` for short-lived Functions/Lambdas. |
-| `state.file_path` | `/tmp/cloud-alert-hub-dedupe.json` | `STATE_FILE_PATH` | Only used when `backend: file`. |
+| `state.backend` | `memory` | `STATE_BACKEND` | `memory \| file \| gcs \| s3 \| azure_blob`. |
+| `state.file_path` | `/tmp/cloud-alert-hub-dedupe.json` | `STATE_FILE_PATH` | Used when `backend: file`. |
+| `state.bucket` | — | `STATE_BUCKET` | Required for `gcs` and `s3`. |
+| `state.object_path` | `dedup-state.json` | `STATE_OBJECT_PATH` | Object key inside the bucket (`gcs` and `s3`). |
+| `state.region` | (auto) | `STATE_REGION` | Optional for `s3`; otherwise the boto3 default chain is used. |
+| `state.account_name` | — | `STATE_ACCOUNT_NAME` | Storage Account name for `azure_blob`. |
+| `state.container` | — | `STATE_CONTAINER` | Container name for `azure_blob`. |
+| `state.blob_name` | `dedup-state.json` | `STATE_BLOB_NAME` | Blob name for `azure_blob`. |
+| `state.connection_string_env` | — | — | If set, `azure_blob` uses the connection string in this env var instead of `DefaultAzureCredential`. |
+
+### Sizing `dedupe_window_seconds`
+
+The budget feature builds a *period-aware* dedup key (cloud, project, budget,
+billing-period start, threshold). To suppress re-emissions for an entire
+billing month and still alert when a fresh month begins, set
+`features.budget_alerts.dedupe_window_seconds` to **at least 32 days**
+(`2764800`). The expiry GC inside the state backend cleans up old entries
+automatically (after `2 × dedupe_window_seconds`), so the JSON blob stays
+tiny regardless of how many thresholds you configure.
 
 ## `payload_overrides`
 
@@ -139,6 +173,12 @@ Cloud Function / Lambda deployments rely on cloud IAM instead.
 | `DEFAULT_ROUTE` | `routing.default_route` |
 | `STATE_BACKEND` | `state.backend` |
 | `STATE_FILE_PATH` | `state.file_path` |
+| `STATE_BUCKET` | `state.bucket` (gcs / s3) |
+| `STATE_OBJECT_PATH` | `state.object_path` (gcs / s3) |
+| `STATE_REGION` | `state.region` (s3) |
+| `STATE_ACCOUNT_NAME` | `state.account_name` (azure_blob) |
+| `STATE_CONTAINER` | `state.container` (azure_blob) |
+| `STATE_BLOB_NAME` | `state.blob_name` (azure_blob) |
 | `SLACK_WEBHOOK_URL` (or whatever `notifications.slack.webhook_url_env` names) | Slack webhook value |
 | `INGEST_SHARED_TOKEN` (or whatever `ingress_auth.shared_token_env` names) | Dev server auth token |
 | `DEAD_LETTER_FILE_PATH` | Path for dead-letter .jsonl file |

@@ -10,6 +10,78 @@ _No unreleased changes yet._
 
 ---
 
+## [0.3.3] — 2026-04-25
+
+Adds **persistent, multi-cloud dedup state** so serverless deployments
+fire each budget threshold exactly once per billing period — even across
+function cold starts. Previously, in-memory dedup state was wiped every
+~10–30 minutes when the platform recycled the function instance, causing
+the same threshold message to re-fire every time the source (GCP Cloud
+Billing, AWS Budgets, Azure Cost Management) re-emitted it (~22-minute
+interval). At 300% spend that meant ~2,000 duplicate Slack alerts per
+month per deployment.
+
+### Added
+
+- Three new state backends — all optional extras, each using its cloud's
+  native object storage (no new managed service introduced):
+  - `GCSState` — `pip install 'cloud-alert-hub[gcp]'`
+  - `S3State` — `pip install 'cloud-alert-hub[aws]'`
+  - `AzureBlobState` — `pip install 'cloud-alert-hub[azure]'`
+- Shared `_ObjectStoreState` base with optimistic-concurrency retries,
+  expiry GC, and a small in-memory fake for tests.
+- `state.{bucket,object_path,region,account_name,container,blob_name,
+  connection_string_env}` config keys + matching env-var overrides
+  (`STATE_BUCKET`, `STATE_OBJECT_PATH`, …) — see
+  [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
+- New end-to-end Azure deploy guide
+  ([`docs/DEPLOY_AZURE.md`](docs/DEPLOY_AZURE.md)) covering Storage Account
+  + container + Managed-Identity RBAC for the Azure Blob backend.
+- Eleven new state-backend tests covering: in-memory fake of the cloud
+  base class, dedup-window semantics, concurrent-write conflict + retry,
+  expiry GC, factory routing, and "missing required key" error messages.
+- Two new budget-feature tests covering the period-aware dedup key.
+
+### Changed
+
+- **Budget feature dedup key now includes the billing period.** It went
+  from `cloud:project:budget:threshold` to
+  `cloud:project:budget:cost_interval_start:threshold`. This means the
+  same threshold inside the same billing month dedups for the *whole
+  month* (no matter how big `dedupe_window_seconds` is), but a fresh
+  month re-fires from 50% as expected.
+- Default `features.budget_alerts.dedupe_window_seconds` raised from
+  `1800` (30 min) to `2764800` (32 days) in `bundled_defaults.yaml` and
+  `config.example.yaml`. With the new period-aware key + cloud-native
+  state backend, this guarantees exactly-once delivery per (threshold,
+  billing-period) pair.
+- `docs/DEPLOY_GCP.md` and `docs/DEPLOY_AWS.md` got new "Create the
+  dedup-state bucket" sections + IAM grants + troubleshooting rows for
+  the new failure modes (missing extras, missing IAM).
+- `examples/gcp-cloud-function/` and `examples/aws-lambda/` configs and
+  README's now wire the GCS / S3 backends by default; `requirements.txt`
+  files use `cloud-alert-hub[gcp]` / `cloud-alert-hub[aws]` extras.
+
+### Migration notes
+
+Existing deployments keep working unmodified — `state.backend: memory`
+remains the default, and the previous (period-less) dedup key is a strict
+prefix of the new key, so re-deploys won't replay history. To enable the
+new persistent dedup:
+
+1. Create a small object-store bucket / container in your cloud.
+2. Grant the function's runtime service account / role read+write on it.
+3. Update `requirements.txt` to use the matching extra
+   (`cloud-alert-hub[gcp|aws|azure]`).
+4. Set `state.backend` and the corresponding bucket/container keys in
+   `config.yaml`.
+5. Bump `dedupe_window_seconds` to at least `2764800` (32 days) so a full
+   billing period is covered.
+
+See the per-cloud deploy docs for copy-pasteable commands.
+
+---
+
 ## [0.3.2] — 2026-04-25
 
 Fixes Slack/email rendering on native cloud-vendor budget payloads. Cloud

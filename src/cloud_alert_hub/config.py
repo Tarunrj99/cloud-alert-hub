@@ -86,6 +86,12 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         "DEFAULT_ROUTE": ("routing", "default_route"),
         "STATE_BACKEND": ("state", "backend"),
         "STATE_FILE_PATH": ("state", "file_path"),
+        "STATE_BUCKET": ("state", "bucket"),
+        "STATE_OBJECT_PATH": ("state", "object_path"),
+        "STATE_REGION": ("state", "region"),
+        "STATE_ACCOUNT_NAME": ("state", "account_name"),
+        "STATE_CONTAINER": ("state", "container"),
+        "STATE_BLOB_NAME": ("state", "blob_name"),
     }
     result = dict(config)
     for env_var, path in env_map.items():
@@ -221,6 +227,39 @@ class Config:
     @property
     def state_file_path(self) -> str:
         return str(self.get("state", "file_path", default="/tmp/cloud-alert-hub-dedupe.json"))
+
+    # GCS / S3 (object_path also reused by file-on-disk for the cloud backends)
+    @property
+    def state_bucket(self) -> str:
+        return str(self.get("state", "bucket", default="") or "")
+
+    @property
+    def state_object_path(self) -> str:
+        return str(self.get("state", "object_path", default="dedup-state.json"))
+
+    # S3 only
+    @property
+    def state_region(self) -> str | None:
+        value = self.get("state", "region", default=None)
+        return str(value) if value else None
+
+    # Azure Blob Storage
+    @property
+    def state_account_name(self) -> str:
+        return str(self.get("state", "account_name", default="") or "")
+
+    @property
+    def state_container(self) -> str:
+        return str(self.get("state", "container", default="") or "")
+
+    @property
+    def state_blob_name(self) -> str:
+        return str(self.get("state", "blob_name", default="dedup-state.json"))
+
+    @property
+    def state_connection_string_env(self) -> str | None:
+        value = self.get("state", "connection_string_env", default=None)
+        return str(value) if value else None
 
     # ---- payload overrides -------------------------------------------------
 
