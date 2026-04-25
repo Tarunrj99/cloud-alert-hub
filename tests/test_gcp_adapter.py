@@ -72,7 +72,7 @@ def test_native_budget_summary_shows_actual_percent_when_over_threshold() -> Non
     *both* numbers so the reader doesn't read "300%" as the current spend.
     """
     inner = {
-        "budgetDisplayName": "Satschel Nonprod - Monthly Budget Alert",
+        "budgetDisplayName": "Example Monthly Budget",
         "budgetAmount": 10000.0,
         "costAmount": 37068.59,
         "currencyCode": "USD",

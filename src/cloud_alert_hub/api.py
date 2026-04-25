@@ -43,7 +43,7 @@ def _enrich_from_config(alert: CanonicalAlert, config: Config) -> CanonicalAlert
        — set automatically by Cloud Functions / Cloud Run / Lambda
 
     This guarantees renderers always show useful context
-    (``Environment: nonprod``, ``Project: glossy-fastness-305315``) instead of
+    (``Environment: nonprod``, ``Project: my-project-id``) instead of
     defaulting to ``unknown`` / hiding the field.
     """
     if not alert.environment or alert.environment == "unknown":

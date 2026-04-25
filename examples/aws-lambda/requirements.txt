@@ -2,11 +2,11 @@
 # Install the cloud_alert_hub library directly from the public GitHub repo.
 # If you fork this project, replace `Tarunrj99` below with your GitHub handle.
 #
-# For production, pin to a tag (e.g. @v0.3.3) or a commit SHA so deploys are
+# For production, pin to a tag (e.g. @v0.3.4) or a commit SHA so deploys are
 # reproducible. `@main` is convenient for quick iteration only.
 #
 # The [aws] extra pulls in boto3 so the library can write its dedup state
 # blob to an S3 bucket. The Lambda runtime ships boto3 too, but pinning here
 # keeps local tests and container builds reproducible.
 # ---------------------------------------------------------------------------
-cloud-alert-hub[aws] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.3
+cloud-alert-hub[aws] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.4

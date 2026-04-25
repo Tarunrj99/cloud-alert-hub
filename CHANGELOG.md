@@ -352,7 +352,9 @@ Initial public release.
 - Status: beta — API surface is considered stable but may evolve before
   1.0. Breaking changes will be called out under `## [Unreleased]`.
 
-[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.4
+[0.3.3]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.3
 [0.3.2]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.1
 [0.2.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.2.1
