@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+_No changes yet — open a PR to add an entry here._
+
+---
+
+## [0.5.0] — 2026-04-25
+
+Makes the library wirable to **any** GCP Cloud Monitoring policy via a
+single `--user-labels=kind=…` flag, not just `cost_spike`. Operators
+can now point existing infrastructure (CPU, memory, GKE node count,
+network egress, log volume) and audit-log policies at the
+`cloud-alert-hub` Pub/Sub topic and have them routed to the matching
+feature without writing a publisher.
+
+This release also bakes in the public-repo hardening from the prior
+"Unreleased" cycle (hygiene scanner, documentation completeness
+guard, end-to-end killswitch tests) so they're now part of a tagged,
+reproducible release.
+
 ### Added
 
 - **GCP adapter: route Cloud Monitoring incidents by `policy_user_labels.kind`.**
@@ -108,14 +126,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   GCP example payload fixtures. Existing deployments are unaffected
   — the topic name is only a default that can be overridden via the
   `PUBSUB_TOPIC` env var or `--trigger-topic` flag.
-
-### Changed
-
 - README: layout block now lists `manifest.py`, `cost_spike.py`, and
   `tools/`; the quick-start `requirements.txt` example pins
-  `@v0.4.1` instead of `@v0.4.0`; the docs index now links
-  `docs/RECIPES.md`. The doc-completeness test enforces the
-  `RECIPES.md` cross-link going forward.
+  `@v0.5.0`; the docs index now links `docs/RECIPES.md`. The
+  doc-completeness test enforces the `RECIPES.md` cross-link going
+  forward.
 - `docs/FEATURES.md`: `infrastructure_spike` and `security_audit`
   sections now point at Recipe F / G as the canonical GCP source,
   document the kind-promotion mechanism, and explain how dedupe-key
@@ -123,7 +138,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Stats
 
-- Test count: **237 tests** (was 229). Net +8 from this slice:
+- Test count: **237 tests** (was 229). Net +8 in this release:
   - 4 new GCP adapter routing tests for `policy_user_labels.kind`.
   - 2 new payload-fixture parametrisations (`gcp-infrastructure-spike-monitoring-incident.json`,
     `gcp-security-audit-monitoring-incident.json`).
