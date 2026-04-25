@@ -58,6 +58,39 @@ def test_native_billing_budget_payload_is_parsed() -> None:
     assert alert.labels["budget_amount_type"] == "SPECIFIED_AMOUNT"
     assert alert.labels["budget_amount_type_label"] == "Specified amount"
     assert alert.labels["period_label"] == "April 2026"
+    # Spend ratio (50.23%) is within 5pp of the threshold (50%), so the
+    # summary uses the simple form (no "(crossed X%)" parenthetical).
+    assert alert.metrics["actual_percent"] == 50
+    assert alert.labels["actual_percent"] == "50"
+    assert "Spend has reached" in alert.summary
+    assert "*50%*" in alert.summary
+
+
+def test_native_budget_summary_shows_actual_percent_when_over_threshold() -> None:
+    """When spend has drifted well past the highest crossed threshold (e.g.
+    you crossed 300% but you're already at 371%), the summary must show
+    *both* numbers so the reader doesn't read "300%" as the current spend.
+    """
+    inner = {
+        "budgetDisplayName": "Satschel Nonprod - Monthly Budget Alert",
+        "budgetAmount": 10000.0,
+        "costAmount": 37068.59,
+        "currencyCode": "USD",
+        "alertThresholdExceeded": 3.0,  # crossed the 300% step
+        "costIntervalStart": "2026-04-01T07:00:00Z",
+        "budgetAmountType": "SPECIFIED_AMOUNT",
+    }
+    alert = from_gcp_pubsub(_envelope(inner))
+    assert alert.labels["threshold_percent"] == "300"
+    assert alert.metrics["actual_percent"] == 371
+    assert alert.labels["actual_percent"] == "371"
+    # Title is unambiguous: "300% threshold reached", not "300% reached".
+    assert "300% threshold reached" in alert.title
+    # Summary references both the threshold and the actual ratio.
+    assert "Crossed the *300%* budget threshold" in alert.summary
+    assert "*371%* of budget" in alert.summary
+    assert "$37,068.59" in alert.summary
+    assert "$10,000.00" in alert.summary
 
 
 def test_native_budget_period_label_for_mid_month_start() -> None:

@@ -184,25 +184,49 @@ def _progress_block(alert: CanonicalAlert, width: int) -> dict | None:
     metrics = alert.metrics or {}
     cost = metrics.get("cost_amount")
     budget = metrics.get("budget_amount")
-    threshold_fraction = metrics.get("threshold_fraction")
     try:
         thr_percent = int(alert.labels.get("threshold_percent", 0))
     except (TypeError, ValueError):
         thr_percent = 0
-    if threshold_fraction is None and budget and cost:
-        threshold_fraction = cost / budget
+
+    # Prefer the *actual* cost/budget ratio over the threshold fraction.
+    # Otherwise, when spend is well past the highest configured threshold,
+    # the bar gets stuck reporting the threshold (e.g. "300%") instead of
+    # the truthful spend ratio (e.g. "371%").
+    actual_fraction: float | None = None
+    if budget and cost:
+        try:
+            actual_fraction = float(cost) / float(budget)
+        except (TypeError, ValueError, ZeroDivisionError):
+            actual_fraction = None
+    threshold_fraction = metrics.get("threshold_fraction")
     if threshold_fraction is None and thr_percent:
         threshold_fraction = thr_percent / 100
-    if threshold_fraction is None:
+
+    progress_fraction = actual_fraction if actual_fraction is not None else threshold_fraction
+    if progress_fraction is None:
         return None
 
     currency = alert.annotations.get("currencyCode") or alert.labels.get("currency") or "USD"
     cost_fmt = _format_currency_amount(cost, currency)
     budget_fmt = _format_currency_amount(budget, currency)
 
-    bar = _progress_bar(threshold_fraction, width=width)
-    pct = threshold_fraction * 100
-    heading = f"*Spend progress:* `{bar}` *{pct:.0f}%*"
+    bar = _progress_bar(progress_fraction, width=width)
+    pct = progress_fraction * 100
+    if (
+        actual_fraction is not None
+        and threshold_fraction is not None
+        and abs(actual_fraction - threshold_fraction) >= 0.05
+    ):
+        # Show both numbers when they meaningfully differ (>5pp gap), so the
+        # reader sees "spend is 371% of budget; you crossed the 300% step".
+        thr_pct_label = int(round(threshold_fraction * 100))
+        heading = (
+            f"*Spend progress:* `{bar}` *{pct:.0f}%* "
+            f"(crossed *{thr_pct_label}%* threshold)"
+        )
+    else:
+        heading = f"*Spend progress:* `{bar}` *{pct:.0f}%*"
     detail = f"Spent {cost_fmt}  of  {budget_fmt}"
     return {"type": "section", "text": {"type": "mrkdwn", "text": f"{heading}\n{detail}"}}
 

@@ -135,6 +135,32 @@ def test_slack_progress_bar_caps_at_full_for_over_100() -> None:
     assert "210%" in bar
 
 
+def test_slack_progress_bar_shows_actual_spend_when_drifted_past_threshold() -> None:
+    """Regression: when GCP keeps re-emitting "300% reached" but spend is
+    actually at 371%, the progress bar must show 371% and surface the
+    crossed threshold separately. Otherwise readers misread the alert as
+    "spend equals 300%".
+    """
+    alert = _budget_alert(
+        labels={"budget_name": "demo", "threshold_percent": "300"},
+        metrics={
+            "cost_amount": 37068.59,
+            "budget_amount": 10000.0,
+            "threshold_fraction": 3.0,
+        },
+    )
+    msg = render_slack(alert, channel="#x")
+    progress = next(
+        b for b in msg.blocks
+        if b.get("type") == "section"
+        and isinstance(b.get("text"), dict)
+        and "Spend progress" in b["text"].get("text", "")
+    )
+    text = progress["text"]["text"]
+    assert "371%" in text
+    assert "crossed *300%* threshold" in text
+
+
 def test_slack_non_budget_has_no_progress_bar() -> None:
     alert = _budget_alert(kind="service", severity="high", metrics={"error_rate": 0.05})
     msg = render_slack(alert, channel="#x")

@@ -129,11 +129,33 @@ def _from_native_budget(
     cost_fmt = _format_currency(cost_amount, currency)
     budget_fmt = _format_currency(budget_amount, currency)
 
-    title = f"{budget_name} — {threshold_percent}% reached"
-    summary = (
-        f"Spend has reached *{threshold_percent}%* of the budget "
-        f"({cost_fmt} of {budget_fmt})."
-    )
+    # Compute the *actual* spend ratio so the summary is unambiguous. GCP
+    # Cloud Billing keeps re-publishing "300% threshold reached" messages
+    # even when actual spend has grown well past 300%, so just echoing
+    # ``threshold_percent`` reads as "spend = 300%" — misleading once you're
+    # over the highest configured threshold.
+    actual_percent: int | None = None
+    if (
+        isinstance(cost_amount, (int, float))
+        and isinstance(budget_amount, (int, float))
+        and budget_amount
+    ):
+        actual_percent = int(round(float(cost_amount) / float(budget_amount) * 100))
+
+    title = f"{budget_name} — {threshold_percent}% threshold reached"
+    if actual_percent is not None and abs(actual_percent - threshold_percent) >= 5:
+        # Spend has drifted noticeably past the configured threshold (e.g. you
+        # crossed 300% but you're currently at 371%). Show both numbers.
+        summary = (
+            f"Crossed the *{threshold_percent}%* budget threshold — "
+            f"current spend is {cost_fmt} of {budget_fmt} "
+            f"(*{actual_percent}%* of budget)."
+        )
+    else:
+        summary = (
+            f"Spend has reached *{threshold_percent}%* of the budget "
+            f"({cost_fmt} of {budget_fmt})."
+        )
 
     labels = {
         "budget_name": str(budget_name),
@@ -160,6 +182,9 @@ def _from_native_budget(
         metrics["budget_amount"] = float(budget_amount)
     if threshold_fraction:
         metrics["threshold_fraction"] = threshold_fraction
+    if actual_percent is not None:
+        metrics["actual_percent"] = float(actual_percent)
+        labels["actual_percent"] = str(actual_percent)
 
     billing_account = attrs.get("billingAccountId")
     links: dict[str, str] = {}

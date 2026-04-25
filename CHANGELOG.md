@@ -10,6 +10,43 @@ _No unreleased changes yet._
 
 ---
 
+## [0.3.4] — 2026-04-25
+
+Fixes a long-standing **rendering ambiguity** in budget alerts: when actual
+spend has drifted past the highest configured threshold (e.g. you crossed
+300% but you're already at 371%), the Slack message used to print
+"Spend has reached *300%* of the budget ($37,068 of $10,000)" and a
+progress bar labelled "300%". A reader could easily misread that as
+"current spend equals 300%". Now the alert shows the true spend ratio
+*and* names the threshold that was crossed.
+
+### Changed
+
+- **GCP Pub/Sub adapter** (`adapters/gcp_pubsub.py::_from_native_budget`)
+  - Title changed from `"X% reached"` to `"X% threshold reached"`.
+  - Summary uses the simple form (`"Spend has reached X% of the budget …"`)
+    only when actual spend ratio is within 5pp of the threshold. Otherwise
+    it switches to: `"Crossed the *X%* budget threshold — current spend is
+    $Y of $Z (*A%* of budget)."`
+  - New canonical fields: `metrics["actual_percent"]` (float) and
+    `labels["actual_percent"]` (str), both computed from
+    `cost_amount / budget_amount`.
+- **Slack renderer** (`renderer.py::_progress_block`)
+  - Progress bar percentage now reflects the *actual* `cost / budget` ratio
+    instead of `alertThresholdExceeded`. The bar still caps visually at the
+    configured width but the numeric label tells the truth.
+  - When actual ratio differs from the crossed threshold by ≥5pp, the
+    heading appends `(crossed *X%* threshold)` so both numbers are visible.
+- Existing renderer + adapter tests updated; two new regression tests
+  cover the over-budget case end-to-end.
+
+### Fixed
+
+- Removes the misleading "300%" label on alerts where actual spend is
+  significantly past the highest configured threshold step.
+
+---
+
 ## [0.3.3] — 2026-04-25
 
 Adds **persistent, multi-cloud dedup state** so serverless deployments
