@@ -24,16 +24,30 @@ features:
 * **Expects on the payload:**
   * `labels.budget_name` — identifier the producer uses for the budget.
   * `labels.threshold_percent` — e.g. `"50"`, `"100"`, `"150"`.
-  * `metrics.cost_amount_usd`, `metrics.budget_amount_usd` (optional but nice).
-* **Dedupe key:** `cloud:project:budget_name:threshold_percent`.
+  * `labels.cost_interval_start` — billing period start (ISO timestamp);
+    the GCP adapter populates this from `costIntervalStart`. Used to make
+    the dedupe key period-aware.
+  * `metrics.cost_amount`, `metrics.budget_amount` (optional but nice).
+* **Dedupe key:**
+  `cloud:project:budget_name:cost_interval_start:threshold_percent`.
+  This means each (budget × billing month × threshold) triple fires
+  **exactly once** per `dedupe_window_seconds`. Because the period is in
+  the key, an old 300% suppression in April will not block a fresh 50%
+  alert in May.
 * **Severity:** derived from the threshold (≥200% = critical, ≥100% = high,
   ≥90% = medium, else low).
+* **Note:** the library does **not** send the cloud-native budget email.
+  Those go directly from your cloud provider (`noreply-monitoring@google.com`
+  for GCP, `no-reply@aws.amazon.com` for AWS Budgets, etc.) via the
+  budget rule's notification channels and are *edge-triggered* — one
+  email per fresh threshold crossing. The library only owns the Slack
+  delivery (and an optional custom email via SES/SendGrid/SMTP).
 * **Config:**
   ```yaml
   features.budget_alerts:
     enabled: true
     thresholds_percent: [50, 70, 90, 100, 110, 120, 150, 200, 300]
-    dedupe_window_seconds: 1800
+    dedupe_window_seconds: 2764800   # 32 days — covers a full billing month
     route: finops
   ```
 

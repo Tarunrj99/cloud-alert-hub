@@ -27,16 +27,16 @@
        ▼
 ┌─────────────┐  safe overrides applied (route_key, labels, ...)
 │  policy     │  features[].claims() → first match wins
-└──────┬──────┘  dedupe state consulted
+└──────┬──────┘  dedupe state consulted (object-store backend)
        │  PolicyDecision (should_deliver, target, trace)
        ▼
-┌─────────────┐  render Slack Block Kit + email body
+┌─────────────┐  render Slack Block Kit + (optional) email body
 │  renderer   │
 └──────┬──────┘
        │  SlackMessage / EmailMessage
        ▼
 ┌─────────────┐  per-channel retry with backoff
-│  notifier   │  → Slack webhook · email provider
+│  notifier   │  → Slack webhook · (optional) email provider
 └──────┬──────┘
        │
        ▼
@@ -44,6 +44,49 @@
 │ dead-letter │  JSON-Lines file for audit replay
 └─────────────┘
 ```
+
+## Two parallel delivery paths (what the library does, what the cloud does)
+
+The library **does not replace** your cloud's native email channels — it
+runs *alongside* them. This is intentional: cloud-native email channels
+are auth'd, rate-limited, and signed by the cloud provider, and most
+audit policies require them as the primary record.
+
+```
+                ┌─────────────────────────────────────────────┐
+                │  GCP Cloud Billing budget rule              │
+                │  AWS Budgets   /   Azure Cost Management    │
+                └──────┬──────────────────────────────────┬───┘
+                       │                                  │
+                       │ (a) native email channel         │ (b) Pub/Sub / SNS / Event Grid
+                       ▼                                  ▼
+              ┌────────────────────┐         ┌────────────────────────┐
+              │  Inbox (operators) │         │  Cloud Function /      │
+              │  edge-triggered    │         │  Lambda /              │
+              │  one mail per      │         │  Azure Function        │
+              │  threshold cross   │         └────────────┬───────────┘
+              └────────────────────┘                      │
+                                                          ▼
+                                              ┌────────────────────┐
+                                              │  cloud_alert_hub   │
+                                              │  → Slack           │
+                                              │  → (optional)      │
+                                              │    custom email    │
+                                              │    via SES /       │
+                                              │    SendGrid / SMTP │
+                                              └────────────────────┘
+```
+
+| Channel | Who renders the message | Triggering | Use it for |
+| ------- | ----------------------- | ---------- | ---------- |
+| **Cloud-native email** (e.g. `noreply-monitoring@google.com`) | the cloud provider | edge-triggered (one email per fresh threshold crossing) | the audit-of-record recipients (billing admins, finance) |
+| **Slack via this library** | `cloud_alert_hub` + your `config.yaml` | level-triggered upstream, **deduplicated to once-per-threshold-per-period** by the library's state backend | the operations channel that needs rich context, severity emoji, runbook links, and noise control |
+| **Custom email via this library** *(opt-in)* | `cloud_alert_hub` + your `config.yaml` | same as Slack | when you want SES/SendGrid/SMTP with the same Block Kit-style fields, e.g. for non-GCP recipients or branded mail |
+
+Most production deployments only enable the first two: cloud-native
+email for the audit list, library Slack for the ops channel. The
+library's email notifier is for the rare case where you want a custom
+email path that is not the cloud-native one.
 
 ## Key abstractions
 
