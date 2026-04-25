@@ -1,0 +1,25 @@
+{
+  "cloud": "gcp",
+  "environment": "nonprod",
+  "project": "my-nonprod-project",
+  "kind": "infrastructure",
+  "title": "GKE node CPU saturation — gke-data-pool",
+  "summary": "Average CPU on node pool gke-data-pool is 92% over the last 10 minutes (threshold: 85%).",
+  "service": "gke",
+  "owner": "platform",
+  "runbook_url": "https://runbooks.example.com/gke-cpu",
+  "labels": {
+    "cluster": "gke-data-prod-001",
+    "node_pool": "gke-data-pool",
+    "region": "us-central1",
+    "category": "infrastructure"
+  },
+  "metrics": {
+    "cpu_utilization_percent": 92.0,
+    "memory_utilization_percent": 71.4,
+    "node_count": 8
+  },
+  "links": {
+    "Cluster": "https://console.cloud.google.com/kubernetes/clusters"
+  }
+}

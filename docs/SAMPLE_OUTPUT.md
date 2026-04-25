@@ -5,22 +5,36 @@ the library produces. All samples below come from the *real* renderer driven
 by the real [`gcp-billing-budget-native.json`](../examples/payloads/gcp-billing-budget-native.json)
 fixture at different threshold fractions (50%, 90%, 120%, 210%).
 
-> Reproduce these any time with:
+> Reproduce **any** of these locally without sending anything to Slack:
 >
 > ```bash
-> python -m cloud_alert_hub.tools.preview_slack  # not a real CLI — see DEBUG_RUNBOOK.md
+> # any feature, any cloud, any payload — just point it at one of
+> # examples/payloads/* and pass --source gcp|aws|azure|generic
+> python -m cloud_alert_hub.tools.preview_slack \
+>     --source generic examples/payloads/generic-cost-spike.json
 > ```
 >
-> …or by running the renderer directly as shown at the bottom of this page.
+> Output is the exact Block Kit JSON the library would POST to Slack —
+> paste it into [Slack's Block Kit Builder](https://api.slack.com/tools/block-kit-builder)
+> to see the rendered card visually.
 
 Contents:
 - [Severity matrix](#severity-matrix)
-- [50% — LOW](#50--low)
-- [90% — MEDIUM](#90--medium)
-- [120% — HIGH](#120--high)
-- [210% — CRITICAL](#210--critical)
+- Budget alerts
+  - [50% — LOW](#50--low)
+  - [90% — MEDIUM](#90--medium)
+  - [120% — HIGH](#120--high)
+  - [210% — CRITICAL](#210--critical)
+- Cost-spike alerts
+  - [Cost spike — Recipe A (Cloud Monitoring)](#cost-spike--recipe-a-cloud-monitoring)
+  - [Cost spike — Recipe B/E (dollar deltas)](#cost-spike--recipe-be-dollar-deltas)
+  - [Cost spike — Recipe C (AWS Cost Anomaly)](#cost-spike--recipe-c-aws-cost-anomaly)
+- Other features
+  - [Service SLO breach](#service-slo-breach)
+  - [Security audit finding](#security-audit-finding)
+  - [Infrastructure spike](#infrastructure-spike)
 - [Anatomy of a message](#anatomy-of-a-message)
-- [Full Block Kit JSON (120% case)](#full-block-kit-json-120-case)
+- [Full Block Kit JSON (120% budget case)](#full-block-kit-json-120-budget-case)
 - [Hiding sections with `slack.display`](#hiding-sections-with-slackdisplay)
 - [Reproducing locally](#reproducing-locally)
 
@@ -122,6 +136,191 @@ Over budget:      ⚠ $11,000.00
 …
 ```
 
+## Cost spike — Recipe A (Cloud Monitoring)
+
+Source: a Cloud Monitoring incident routed through a Pub/Sub notification
+channel labelled `kind=cost_spike`. The library converts the incident
+into a `cost_spike` canonical alert and uses the
+`resource.label.service` reported by Monitoring as the service name —
+**any service** that hits the threshold lands here, not just LLM APIs.
+
+```text
+[HIGH · nonprod] Cost spike — generativelanguage.googleapis.com
+🔴 HIGH    📈 cost_spike    🌏 nonprod
+
+Request rate for generativelanguage.googleapis.com is 212.4/s, more than
+5x the 7-day baseline (20.0/s).
+
+──────────────────────────────────────────
+Service:                 generativelanguage.googleapis.com
+Window:                  2026-04-25
+──────────────────────────────────────────
+Cloud           Environment        Project                 Service                                Type
+gcp             nonprod            my-nonprod-project      generativelanguage.googleapis.com      cost_spike
+
+🔗 https://console.cloud.google.com/monitoring/alerting/incidents/cm-incident-0001
+event_id …  •  🕒 2026-04-25 08:30 UTC  •  🧭 route finops
+```
+
+Reproduce locally:
+
+```bash
+python -m cloud_alert_hub.tools.preview_slack \
+    --source gcp examples/payloads/gcp-cost-spike-monitoring-incident.json
+```
+
+## Cost spike — Recipe B/E (dollar deltas)
+
+Source: a BigQuery scheduled query (Recipe B) or any custom detector
+(Recipe E) that publishes a canonical payload with `previous_amount` and
+`current_amount` in dollars. The library computes `delta_percent`, picks
+severity from the configured ladder (`+100% → medium`, `+300% → high`,
+`+1000% → critical`), and renders dollar amounts in the message.
+
+```text
+[CRITICAL · nonprod] Cost spike detected — generativelanguage.googleapis.com
+🚨 CRITICAL    📈 cost_spike    🌏 nonprod
+
+Daily spend on generativelanguage.googleapis.com jumped from $12.40
+(7-day median) to $4,021.55 today (+32,330%).
+
+──────────────────────────────────────────
+Service:                 generativelanguage.googleapis.com
+Window:                  2026-04-25
+Delta:                   +32,330% 🔥
+──────────────────────────────────────────
+Cloud           Environment        Project                 Service                               Type
+gcp             nonprod            my-nonprod-project      generativelanguage.googleapis.com     cost_spike
+
+Metrics
+• previous_amount_usd: 12.40
+• current_amount_usd:  4,021.55
+• delta_percent:       32,330.00
+
+📚 Runbook   🔗 Billing console
+event_id …  •  🕒 2026-04-25 10:19 UTC  •  🧭 route finops
+```
+
+Reproduce locally:
+
+```bash
+python -m cloud_alert_hub.tools.preview_slack \
+    --source generic examples/payloads/generic-cost-spike.json
+```
+
+## Cost spike — Recipe C (AWS Cost Anomaly)
+
+Source: AWS Cost Anomaly Detection → SNS topic with message attribute
+`kind=cost_spike`. The AWS adapter emits a canonical `cost_spike` alert
+exactly the same shape as Recipe B/E, so the renderer treats them
+identically — only the cloud, service name, and `links` differ.
+
+```text
+[CRITICAL · nonprod] AWS Cost Anomaly — Bedrock
+🚨 CRITICAL    📈 cost_spike    🌏 nonprod
+
+AWS Cost Anomaly Detection flagged Amazon Bedrock spend at $1,847.20
+today vs $42.10 7-day baseline (+4,287%).
+…
+```
+
+Reproduce locally:
+
+```bash
+python -m cloud_alert_hub.tools.preview_slack \
+    --source aws examples/payloads/aws-cost-anomaly-sns.json
+```
+
+## Service SLO breach
+
+Source: any payload with `kind=service`. Severity is decided by the
+`service_slo` feature using the metrics in the payload (defaulting to
+`medium` when SLO breach percent isn't explicit).
+
+```text
+[MEDIUM · nonprod] Service SLO breach — checkout-api error rate
+🔶 MEDIUM    🛠 service    🌏 nonprod
+
+checkout-api error rate is 4.2% over the last 5 minutes (SLO: <1%).
+
+Cloud: gcp     Environment: nonprod     Project: my-nonprod-project
+Service: checkout-api     Type: service     Owner: platform
+
+Metrics
+• error_rate_percent: 4.20
+• p99_latency_ms:     1,820
+• request_count:      12,450
+
+📚 Runbook   🔗 Dashboard
+event_id …  •  🕒 …  •  🧭 route platform
+```
+
+Reproduce locally:
+
+```bash
+python -m cloud_alert_hub.tools.preview_slack \
+    --source generic examples/payloads/generic-service-slo.json
+```
+
+## Security audit finding
+
+Source: any payload with `kind=security`. Typically driven by Cloud
+Audit Logs (`SetIamPolicy`, `SetIamPermissions`, role grants on
+sensitive accounts).
+
+```text
+[MEDIUM · nonprod] IAM policy change on production-like service account
+🔶 MEDIUM    🔐 security    🌏 nonprod
+
+User user@example.com granted roles/owner on service account
+svc-deploy@my-nonprod-project.iam.gserviceaccount.com.
+
+Cloud: gcp     Environment: nonprod     Project: my-nonprod-project
+Type: security     Owner: secops
+
+🔗 Audit log
+event_id …  •  🕒 …  •  🧭 route secops
+```
+
+Reproduce locally:
+
+```bash
+python -m cloud_alert_hub.tools.preview_slack \
+    --source generic examples/payloads/generic-security-audit.json
+```
+
+## Infrastructure spike
+
+Source: any payload with `kind=infrastructure`. Typical triggers: GKE
+node CPU/memory saturation, persistent-disk ops/sec spikes, network
+egress surges.
+
+```text
+[MEDIUM · nonprod] GKE node CPU saturation — gke-data-pool
+🔶 MEDIUM    🖧 infrastructure    🌏 nonprod
+
+Average CPU on node pool gke-data-pool is 92% over the last 10 minutes
+(threshold: 85%).
+
+Cloud: gcp     Environment: nonprod     Project: my-nonprod-project
+Service: gke   Type: infrastructure     Owner: platform
+
+Metrics
+• cpu_utilization_percent:    92.00
+• memory_utilization_percent: 71.40
+• node_count:                 8
+
+🔗 Cluster
+event_id …  •  🕒 …  •  🧭 route platform
+```
+
+Reproduce locally:
+
+```bash
+python -m cloud_alert_hub.tools.preview_slack \
+    --source generic examples/payloads/generic-infrastructure-spike.json
+```
+
 ## Anatomy of a message
 
 A rendered alert is composed of these Block Kit sections, top to bottom.
@@ -134,14 +333,15 @@ Each one can be suppressed individually via `notifications.slack.display.*`:
 | 3 | Summary                   | `show_summary` | 1-2 line human-readable description |
 | 4 | Progress bar              | `show_progress_bar` | Budget alerts only |
 | 5 | Divider                   | implicit | Only rendered when fields are shown |
-| 6 | **Budget details**        | `show_budget_details` | **Budget alerts only** — name, amount (currency + type), billing period, spent, remaining/overage |
+| 6a | **Budget details**       | `show_budget_details` | **Budget alerts only** — name, amount (currency + type), billing period, spent, remaining/overage |
+| 6b | **Spike details**        | `show_spike_details`  | **Cost-spike alerts only** — service, spike window, baseline / current amount, delta % with 🔥 emoji on +1000% |
 | 7 | Fields grid               | `show_fields` + `show_cloud` / `show_environment` / `show_project` / `show_service` / `show_kind` / `show_owner` / `show_account` | Structured key/value cells |
 | 8 | Metrics list              | `show_metrics` | Numeric metrics like `cost_amount`, `error_rate_percent` |
 | 9 | Labels list               | `show_labels` | Free-form label dict (opt-in — chatty) |
 |10 | Links / Runbook           | `show_links` | Runbook URL + any payload-provided links |
 |11 | Footer                    | `show_footer` + `show_event_id` / `show_occurred_at` / `show_route` | Audit trail info |
 
-## Full Block Kit JSON (120% case)
+## Full Block Kit JSON (120% budget case)
 
 This is the *actual* payload sent to Slack's incoming webhook. Paste it into
 Slack's [Block Kit Builder](https://api.slack.com/tools/block-kit-builder) to
@@ -248,31 +448,40 @@ webhook's fallback text — useful in smoke tests that just want to assert
 
 ## Reproducing locally
 
+The same `preview_slack` CLI is the canonical entrypoint for all five
+features and all four cloud sources. It runs the **identical pipeline**
+the production Cloud Function / Lambda runs (adapter → enrichment →
+feature match → renderer) but stops just before the notifier — nothing
+leaves your machine.
+
 ```bash
-python - <<'PY'
-import base64, json
-from cloud_alert_hub.adapters.gcp_pubsub import from_gcp_pubsub
-from cloud_alert_hub.features.budget import BudgetAlertsFeature
-from cloud_alert_hub.renderer import render_slack
+# install the package in editable mode (one-time)
+pip install -e '.[gcp,aws,azure]'
 
-inner = {
-  "budgetDisplayName": "Example Nonprod Monthly Budget",
-  "budgetAmount": 10000.0, "costAmount": 12000.0, "currencyCode": "USD",
-  "alertThresholdExceeded": 1.2,
-  "costIntervalStart": "2026-04-01T00:00:00Z",
-  "budgetAmountType": "SPECIFIED_AMOUNT"
-}
-env = {"message": {"data": base64.b64encode(json.dumps(inner).encode()).decode(),
-                   "attributes": {"project_id":"my-nonprod-project","environment":"nonprod"}}}
+# preview any payload, any source
+python -m cloud_alert_hub.tools.preview_slack \
+    --source generic examples/payloads/generic-cost-spike.json
 
-alert = from_gcp_pubsub(env)
-match = BudgetAlertsFeature({"route":"finops"}).match(alert)
-alert.severity = match.severity
-alert.labels.update(match.labels)
-alert.route_key = "finops"
+# render only the Block Kit blocks (paste into Slack Block Kit Builder):
+python -m cloud_alert_hub.tools.preview_slack \
+    --source gcp --blocks-only examples/payloads/gcp-billing-budget-native.json
 
-msg = render_slack(alert, channel="#alerts-finops",
-                   display={"show_account": False, "progress_bar_width": 22})
-print(json.dumps({"channel": msg.channel, "text": msg.text, "blocks": msg.blocks}, indent=2))
-PY
+# preview with your own deployment config:
+python -m cloud_alert_hub.tools.preview_slack \
+    --source gcp --config nonprod/config.yaml event.json
 ```
+
+Available payload fixtures (all values are placeholders — real account
+IDs, project IDs, and billing IDs are never committed):
+
+| Fixture                                               | Source     | Feature           |
+|-------------------------------------------------------|------------|-------------------|
+| `gcp-billing-budget-native.json`                      | `gcp`      | `budget_alerts`   |
+| `gcp-cost-spike-monitoring-incident.json`             | `gcp`      | `cost_spike`      |
+| `aws-sns-event.json`                                  | `aws`      | `budget_alerts`   |
+| `aws-cost-anomaly-sns.json`                           | `aws`      | `cost_spike`      |
+| `generic-budget-alert.json`                           | `generic`  | `budget_alerts`   |
+| `generic-cost-spike.json`                             | `generic`  | `cost_spike`      |
+| `generic-service-slo.json`                            | `generic`  | `service_slo`     |
+| `generic-security-audit.json`                         | `generic`  | `security_audit`  |
+| `generic-infrastructure-spike.json`                   | `generic`  | `infrastructure_spike` |

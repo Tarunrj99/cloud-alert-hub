@@ -305,22 +305,32 @@ Full reference: [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
 Every feature is one file in [`src/cloud_alert_hub/features/`](src/cloud_alert_hub/features/).
 
-| Feature | Claims alerts where | Typical sources |
-| ------- | ------------------- | --------------- |
-| `budget_alerts` | `kind == "budget"` | GCP Cloud Billing, AWS Budgets, Azure Cost Management |
-| `service_slo` | `kind == "service"` | Cloud Monitoring uptime, CloudWatch alarms, custom SLO burn rate |
-| `security_audit` | `kind == "security"` | SCC findings, CloudTrail, Azure Defender, audit logs |
-| `infrastructure_spike` | `kind == "infrastructure"` | CPU/memory/network usage policies |
+| Feature                | Claims alerts where         | Typical sources                                                       | Status |
+| ---------------------- | --------------------------- | --------------------------------------------------------------------- | :----: |
+| `budget_alerts`        | `kind == "budget"`          | GCP Cloud Billing, AWS Budgets, Azure Cost Management                 | stable |
+| `cost_spike`           | `kind == "cost_spike"`      | Cloud Monitoring policies, BigQuery billing export, AWS Cost Anomaly Detection, Azure Cost Management | stable |
+| `service_slo`          | `kind == "service"`         | Cloud Monitoring uptime, CloudWatch alarms, custom SLO burn rate       | stable |
+| `security_audit`       | `kind == "security"`        | SCC findings, CloudTrail, Azure Defender, IAM audit logs              | stable |
+| `infrastructure_spike` | `kind == "infrastructure"`  | CPU/memory/network usage policies                                     | stable |
 
 Enable any subset per deployment:
 
 ```yaml
 features:
   budget_alerts:        { enabled: true,  thresholds_percent: [50,70,90,100] }
+  cost_spike:           { enabled: true }
   service_slo:          { enabled: false }
   security_audit:       { enabled: true }
   infrastructure_spike: { enabled: false }
 ```
+
+> Want to see what the Slack output looks like for any of these features
+> *before* you enable it? Run
+> `python -m cloud_alert_hub.tools.preview_slack --source generic examples/payloads/generic-cost-spike.json`
+> — it renders the exact Block Kit JSON the library would post, locally,
+> without sending anything. See [`docs/SAMPLE_OUTPUT.md`](docs/SAMPLE_OUTPUT.md)
+> for the full gallery and [`docs/RECIPES.md`](docs/RECIPES.md) for how
+> to *produce* `cost_spike` events on each cloud.
 
 Add your own in ~40 lines of Python — see [Extending](#extending).
 

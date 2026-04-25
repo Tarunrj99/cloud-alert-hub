@@ -1,0 +1,12 @@
+{
+  "Records": [
+    {
+      "EventSource": "aws:sns",
+      "Sns": {
+        "Type": "Notification",
+        "Subject": "AWS Cost Anomaly Detected",
+        "Message": "{\"cloud\":\"aws\",\"environment\":\"nonprod\",\"account_id\":\"123456789012\",\"kind\":\"cost_spike\",\"title\":\"AWS Cost Anomaly — Bedrock\",\"summary\":\"AWS Cost Anomaly Detection flagged Amazon Bedrock spend at $1,847.20 today vs $42.10 7-day baseline (+4,287%).\",\"service\":\"AmazonBedrock\",\"labels\":{\"spike_period\":\"2026-04-25\",\"detector\":\"aws-cost-anomaly-detection\",\"region\":\"us-east-1\"},\"metrics\":{\"previous_amount_usd\":42.10,\"current_amount_usd\":1847.20,\"delta_percent\":4287.0},\"links\":{\"Cost Anomaly console\":\"https://console.aws.amazon.com/cost-management/home#/anomaly-detection\"}}"
+      }
+    }
+  ]
+}

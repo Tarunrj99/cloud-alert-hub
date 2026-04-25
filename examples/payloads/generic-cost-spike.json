@@ -1,0 +1,24 @@
+{
+  "cloud": "gcp",
+  "environment": "nonprod",
+  "project": "my-nonprod-project",
+  "kind": "cost_spike",
+  "title": "Cost spike detected — generativelanguage.googleapis.com",
+  "summary": "Daily spend on generativelanguage.googleapis.com jumped from $12.40 (7-day median) to $4,021.55 today (+32,330%).",
+  "service": "generativelanguage.googleapis.com",
+  "owner": "finops",
+  "runbook_url": "https://runbooks.example.com/cost-spike",
+  "labels": {
+    "spike_period": "2026-04-25",
+    "detector": "bigquery-billing-export",
+    "category": "cost"
+  },
+  "metrics": {
+    "previous_amount_usd": 12.40,
+    "current_amount_usd": 4021.55,
+    "delta_percent": 32330.0
+  },
+  "links": {
+    "Billing console": "https://console.cloud.google.com/billing"
+  }
+}

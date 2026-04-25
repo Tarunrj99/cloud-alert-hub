@@ -18,11 +18,76 @@ stronger cost signal.
 | D      | Azure | Cost anomalies                 | one Cost Management alert        |
 | E      | any   | Custom — your own detector     | a few dozen lines of Python      |
 
-> Why this matters for your nonprod story: the **April 2026 Gemini-key
-> abuse** would have been caught by Recipe A within minutes — well
-> before the monthly budget said "300 % reached". Recipe A doesn't
-> require BigQuery, doesn't cost anything, and re-uses the Pub/Sub
-> topic you've already wired up.
+> Why this matters: a runaway-API event (rogue API key, leaked credential,
+> mis-configured cron) would be caught by Recipe A within minutes — well
+> before a monthly budget says "300 % reached". Recipe A doesn't require
+> BigQuery, doesn't cost anything, and re-uses the Pub/Sub topic you've
+> already wired up.
+
+---
+
+## When does a `cost_spike` alert fire? (and why you won't be spammed)
+
+Two things govern timing:
+
+1. **The detector** — how often the upstream system *evaluates* the
+   condition. This is **outside** the library. You pick the detector to
+   match your tolerance:
+
+   | Recipe | Detector cadence (typical) | First-alert latency |
+   |--------|----------------------------|--------------------:|
+   | A — Cloud Monitoring policy        | every 1–5 min                 | ~5–15 min after the spike starts |
+   | B — BigQuery scheduled query       | once / day at the cron time   | ~24 h (next BQ run)              |
+   | C — AWS Cost Anomaly Detection     | once / day (AWS-managed)      | ~24 h (AWS detection cycle)      |
+   | D — Azure Cost Management alert    | once / day (Azure-managed)    | ~24 h                            |
+   | E — Custom detector                | whatever you schedule         | whatever you schedule            |
+
+2. **The library's deduper** — how many Slack alerts you get *out*. The
+   library keeps state in a cloud-native object store (GCS / S3 / Azure
+   Blob) and applies the rule:
+
+   > **At most one Slack alert per `(cloud, project, service, spike_period)`
+   > inside `dedupe_window_seconds`.**
+
+   With the default `dedupe_window_seconds: 86400` (one day) and the
+   per-day `spike_period` label produced by Recipes A–E, that means:
+
+   - **Recipe A** can re-fire every 5 minutes while the spike persists; you
+     still get **exactly one Slack alert per service per day**.
+   - When the spike re-appears the *next* day, you get **a fresh alert**
+     (the `spike_period` changed, so the dedupe key changes).
+   - When **another service** spikes the same day, you get **a separate
+     alert** (the `service` changed, so the dedupe key changes).
+
+This is the same pattern that protects budget alerts: the upstream system
+can scream as loudly as it wants, the library guarantees Slack doesn't.
+
+> Want hourly granularity instead of daily? Set
+> `labels.spike_period` to the hour bucket (`2026-04-25T08`) at the
+> publisher and shorten `dedupe_window_seconds` to `3600`. You then get
+> at most one alert per service per hour.
+
+---
+
+## Recipe A is service-agnostic by design
+
+Recipe A's Cloud Monitoring policy uses
+`groupByFields: ["resource.label.service"]`. That tells Cloud Monitoring
+to evaluate the threshold **separately for every service** that publishes
+the metric — Vertex AI, Generative Language API, Cloud Run, Compute,
+BigQuery, Cloud SQL, anything. There is no allow-list of services hard-
+coded anywhere; whichever service spikes triggers the policy and is
+named in the resulting incident's `resource.label.service`.
+
+The library then forwards that name through to:
+
+- the `service` field on the canonical alert
+- the dedupe key (`cloud:project:service:spike_period`)
+- the Slack header (`Cost spike — <service>`)
+
+If you want to *exempt* a routinely-bursty service (e.g. `pubsub.googleapis.com`),
+add it to `features.cost_spike.service_denylist` — denylisted services
+are still recorded but routed at `severity=info` so they never wake you.
 
 ---
 

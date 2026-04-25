@@ -1,0 +1,24 @@
+{
+  "cloud": "gcp",
+  "environment": "nonprod",
+  "project": "my-nonprod-project",
+  "kind": "service",
+  "title": "Service SLO breach — checkout-api error rate",
+  "summary": "checkout-api error rate is 4.2% over the last 5 minutes (SLO: <1%).",
+  "service": "checkout-api",
+  "owner": "platform",
+  "runbook_url": "https://runbooks.example.com/checkout-api",
+  "labels": {
+    "slo_name": "checkout-api-availability",
+    "window": "5m"
+  },
+  "metrics": {
+    "error_rate_percent": 4.2,
+    "p99_latency_ms": 1820,
+    "request_count": 12450
+  },
+  "links": {
+    "Runbook": "https://runbooks.example.com/checkout-api",
+    "Dashboard": "https://console.cloud.google.com/monitoring/dashboards"
+  }
+}

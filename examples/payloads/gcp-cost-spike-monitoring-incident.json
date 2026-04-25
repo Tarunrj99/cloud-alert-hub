@@ -1,0 +1,15 @@
+{
+  "message": {
+    "attributes": {
+      "kind": "cost_spike",
+      "environment": "nonprod",
+      "project_id": "my-nonprod-project",
+      "service": "generativelanguage.googleapis.com",
+      "spike_period": "2026-04-25"
+    },
+    "data": "eyJpbmNpZGVudCI6IHsiaW5jaWRlbnRfaWQiOiAiY20taW5jaWRlbnQtMDAwMSIsICJwb2xpY3lfbmFtZSI6ICJwcm9qZWN0cy9teS1ub25wcm9kLXByb2plY3QvYWxlcnRQb2xpY2llcy8wMDAwLXNwaWtlLXBvbGljeSIsICJjb25kaXRpb25fbmFtZSI6ICJQZXItc2VydmljZSByZXF1ZXN0LXJhdGUgc3Bpa2UgKD41eCBvZiA3LWRheSBiYXNlbGluZSkiLCAic3RhdGUiOiAiT1BFTiIsICJzdGFydGVkX2F0IjogMTc0ODE2MDAwMCwgInJlc291cmNlIjogeyJ0eXBlIjogImNvbnN1bWVkX2FwaSIsICJsYWJlbHMiOiB7InNlcnZpY2UiOiAiZ2VuZXJhdGl2ZWxhbmd1YWdlLmdvb2dsZWFwaXMuY29tIiwgInByb2plY3RfaWQiOiAibXktbm9ucHJvZC1wcm9qZWN0In19LCAibWV0cmljIjogeyJ0eXBlIjogInNlcnZpY2VydW50aW1lLmdvb2dsZWFwaXMuY29tL2FwaS9yZXF1ZXN0X2NvdW50IiwgImxhYmVscyI6IHt9fSwgIm9ic2VydmVkX3ZhbHVlIjogIjIxMi40IiwgInRocmVzaG9sZF92YWx1ZSI6ICIyMC4wIiwgInN1bW1hcnkiOiAiUmVxdWVzdCByYXRlIGZvciBnZW5lcmF0aXZlbGFuZ3VhZ2UuZ29vZ2xlYXBpcy5jb20gaXMgMjEyLjQvcywgbW9yZSB0aGFuIDV4IHRoZSA3LWRheSBiYXNlbGluZSAoMjAuMC9zKS4iLCAidXJsIjogImh0dHBzOi8vY29uc29sZS5jbG91ZC5nb29nbGUuY29tL21vbml0b3JpbmcvYWxlcnRpbmcvaW5jaWRlbnRzL2NtLWluY2lkZW50LTAwMDEifSwgInZlcnNpb24iOiAiMS4yIn0=",
+    "messageId": "demo-cost-spike-001",
+    "publishTime": "2026-04-25T08:30:00Z"
+  },
+  "subscription": "projects/my-nonprod-project/subscriptions/billing-alerts-nonprod-sub"
+}

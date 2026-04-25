@@ -1,0 +1,20 @@
+{
+  "cloud": "gcp",
+  "environment": "nonprod",
+  "project": "my-nonprod-project",
+  "kind": "security",
+  "title": "IAM policy change on production-like service account",
+  "summary": "User user@example.com granted roles/owner on service account svc-deploy@my-nonprod-project.iam.gserviceaccount.com.",
+  "owner": "secops",
+  "runbook_url": "https://runbooks.example.com/iam-change",
+  "labels": {
+    "method_name": "google.iam.admin.v1.IAMPolicy.SetIamPolicy",
+    "actor": "user@example.com",
+    "resource": "svc-deploy@my-nonprod-project.iam.gserviceaccount.com",
+    "category": "security"
+  },
+  "metrics": {},
+  "links": {
+    "Audit log": "https://console.cloud.google.com/logs/query"
+  }
+}

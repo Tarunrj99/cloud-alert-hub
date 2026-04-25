@@ -6,7 +6,54 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+
+- **`cloud_alert_hub.tools.preview_slack`** — a real CLI (previously a
+  placeholder reference in docs) for rendering the exact Block Kit
+  message the library would post, locally, without sending anything.
+  Works with every adapter (`gcp`, `aws`, `azure`, `generic`) and every
+  feature. Lets reviewers and operators see the output of any alert
+  before deploying.
+
+  ```bash
+  python -m cloud_alert_hub.tools.preview_slack \
+      --source generic examples/payloads/generic-cost-spike.json
+  ```
+
+- **Per-feature payload fixtures** in `examples/payloads/`:
+  - `gcp-cost-spike-monitoring-incident.json` — Recipe A path
+    (Cloud Monitoring → Pub/Sub with `kind=cost_spike`).
+  - `aws-cost-anomaly-sns.json` — Recipe C path (AWS Cost Anomaly
+    Detection → SNS with `kind=cost_spike`).
+  - `generic-cost-spike.json` — Recipe B/E path (BQ scheduled query
+    or any custom detector).
+  - `generic-service-slo.json`, `generic-security-audit.json`,
+    `generic-infrastructure-spike.json` — one fixture per remaining
+    feature so every Slack output in `SAMPLE_OUTPUT.md` is reproducible.
+  - All values are placeholders — no real account IDs, project IDs, or
+    billing IDs ever land in the public repo.
+
+### Changed
+
+- **`docs/RECIPES.md`** now opens with a **"When does it fire?"**
+  section that explains the detector-cadence vs library-dedup model:
+  the upstream detector decides cadence (e.g. Recipe A re-evaluates
+  every ~5 min), the library guarantees **at most one Slack alert per
+  `(cloud, project, service, spike_period)` per `dedupe_window_seconds`**
+  — so even a 24-hour-long spike produces a single Slack alert per
+  service per day.
+- **`docs/RECIPES.md`** adds an explicit **"Recipe A is service-agnostic
+  by design"** section calling out
+  `groupByFields: ["resource.label.service"]` and explaining that
+  whichever service crosses the threshold gets named in the alert with
+  no code change. The denylist-based opt-out model is documented.
+- **`docs/SAMPLE_OUTPUT.md`** gains real rendered Slack output for
+  every feature (`cost_spike` Recipe A, `cost_spike` Recipe B/E,
+  `cost_spike` Recipe C / AWS Cost Anomaly, `service_slo`,
+  `security_audit`, `infrastructure_spike`) plus a fixture table and a
+  one-liner reproduce command for each.
+- **`README.md`**'s feature table now includes `cost_spike`, marks
+  every feature as `stable`, and points readers at the preview CLI.
 
 ---
 
