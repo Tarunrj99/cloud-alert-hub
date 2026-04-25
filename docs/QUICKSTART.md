@@ -60,7 +60,7 @@ routing:
 ```bash
 export PROJECT_ID=your-gcp-project
 export SLACK_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
-export PUBSUB_TOPIC=billing-alerts-nonprod
+export PUBSUB_TOPIC=cloud-alert-hub-events
 ./deploy.sh
 ```
 
@@ -79,7 +79,7 @@ Publish a test message:
 
 ```bash
 # GCP
-gcloud pubsub topics publish billing-alerts-nonprod \
+gcloud pubsub topics publish cloud-alert-hub-events \
   --message='{"kind":"budget","title":"Test 100%","summary":"dry run","labels":{"threshold_percent":"100"}}'
 
 # AWS

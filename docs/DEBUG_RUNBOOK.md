@@ -141,7 +141,7 @@ Billing budget is touched.
 
 ```bash
 PROJECT_ID="my-nonprod-project"
-TOPIC="billing-alerts-nonprod"
+TOPIC="cloud-alert-hub-events"
 
 for frac in 0.50 0.90 1.20 2.10; do
   pct=$(python3 -c "print(int(round($frac*100)))")

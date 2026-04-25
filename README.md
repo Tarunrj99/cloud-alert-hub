@@ -359,7 +359,7 @@ library but ships a *different* `config.yaml`.
 Pattern:
 
 ```
-billing-alerts-nonprod/    (Pub/Sub: billing-alerts-nonprod)
+cloud-alert-hub-events/    (Pub/Sub: cloud-alert-hub-events)
   └── config.yaml          features.budget_alerts.enabled = true
 
 security-alerts-prod/      (Pub/Sub: security-findings-prod)

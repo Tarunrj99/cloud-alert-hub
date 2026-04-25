@@ -1,0 +1,22 @@
+# ---------------------------------------------------------------------------
+# Local-dev FastAPI server requirements.
+#
+# Install with:
+#
+#     pip install -r examples/local-dev/requirements.txt
+#
+# This pulls the library straight from this repo (``-e ../..``) so edits
+# to ``src/cloud_alert_hub/`` are picked up on the next ``uvicorn --reload``
+# without re-installing. For a non-editable install replace the line below
+# with a release pin, e.g.:
+#
+#     cloud-alert-hub[server] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.4.1
+#
+# ---------------------------------------------------------------------------
+-e ../..[server]
+
+# Hot-reload + ASGI runner. Already pulled in by the [server] extra,
+# but listed explicitly so ``pip install -r`` yields a runnable
+# environment even without the extra.
+uvicorn[standard]>=0.27
+fastapi>=0.110

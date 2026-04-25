@@ -25,9 +25,16 @@
 └──────┬──────┘
        │  CanonicalAlert
        ▼
-┌─────────────┐  safe overrides applied (route_key, labels, ...)
-│  policy     │  features[].claims() → first match wins
-└──────┬──────┘  dedupe state consulted (object-store backend)
+┌─────────────┐  config enrichment (env / project / cloud)
+│  enrich     │  + safe payload overrides (route_key, labels, ...)
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐  (1) global app.alerting_enabled?
+│  policy     │  (2) check_manifest()  ← runtime kill switch
+│             │  (3) features[].claims() → first match wins
+│             │  (4) state.should_suppress(dedupe_key, window)
+└──────┬──────┘
        │  PolicyDecision (should_deliver, target, trace)
        ▼
 ┌─────────────┐  render Slack Block Kit + (optional) email body
@@ -106,6 +113,55 @@ through typed properties so callers don't touch raw dicts.
 Abstract base class. A feature is `claims(alert) → bool` plus
 `match(alert) → FeatureMatch`. The registry in `features/__init__.py` is the
 only place that knows about concrete features.
+
+### Runtime manifest (manifest.py)
+
+Right before the policy engine asks any feature to claim an alert, it
+asks the manifest a single question: *am I still allowed to deliver?*
+
+```
+incoming alert ── policy.evaluate ──┐
+                                    │ (1) app.alerting_enabled?
+                                    │ (2) check_manifest(...)         ◄── manifest.py
+                                    │ (3) features[].claims(alert)
+                                    │ (4) state.should_suppress(...)
+                                    └─► PolicyDecision
+```
+
+`check_manifest()` fetches a small JSON descriptor over HTTPS (default:
+the GitHub Contents API for a public file in this repository), caches
+it for `refresh_interval_seconds`, and returns a
+`ManifestStatus(allow, reason, source, fetched_at, descriptor)`.
+
+The descriptor lets a deployment be paused or reconfigured remotely
+without redeploying any function. It supports:
+
+| Knob | Effect when violated |
+| ---- | ------------------- |
+| `runtime_status` (`active` / `paused` / `deprecated`) | non-`active` ⇒ `allow=False`, `reason=manifest_status_*` |
+| `min_version` | installed library < min ⇒ `allow=False`, `reason=manifest_version_too_old` |
+| `deprecated_versions[]` | installed library on the list ⇒ `allow=False`, `reason=manifest_version_deprecated` |
+| `deployments[deployment_id].allow` | per-deployment kill switch ⇒ `allow=False`, `reason=manifest_deployment_blocked` |
+
+Three failure modes operators care about:
+
+1. **Manifest reachable, says no.** Verdict is honoured. Policy returns
+   `should_deliver=False` with the manifest reason in the trace; no
+   notifier is invoked.
+2. **Manifest 404 / 403 / 410** (URL gone, repo private, asset removed).
+   Default verdict is fail-closed (`reason=manifest_missing`). Operators
+   who want it permissive set `tolerate_missing_manifest: true`.
+3. **Manifest network error** (DNS, timeout, transient 5xx). The cache
+   is reused if present; otherwise the verdict is governed by
+   `tolerate_network_errors` (default `true`, so transient network
+   blips don't take alerting down).
+
+This control plane is intentionally lightweight — a single JSON file
+under public version control, fetched as plain HTTPS — so it adds zero
+runtime dependencies and zero new managed services. See
+[`docs/CONFIGURATION.md`](CONFIGURATION.md#appmanifest) for the full
+schema and `tests/test_manifest.py` for behavioural pinning of every
+edge case above.
 
 ### `BaseState` (state.py)
 

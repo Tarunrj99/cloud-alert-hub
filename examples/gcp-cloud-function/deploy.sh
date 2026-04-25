@@ -12,7 +12,7 @@ set -euo pipefail
 PROJECT_ID="${PROJECT_ID:?set PROJECT_ID env var}"
 REGION="${REGION:-us-central1}"
 FUNCTION_NAME="${FUNCTION_NAME:-cloud-alert-hub-nonprod}"
-PUBSUB_TOPIC="${PUBSUB_TOPIC:-billing-alerts-nonprod}"
+PUBSUB_TOPIC="${PUBSUB_TOPIC:-cloud-alert-hub-events}"
 SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:?set SLACK_WEBHOOK_URL env var}"
 RUNTIME="${RUNTIME:-python312}"
 

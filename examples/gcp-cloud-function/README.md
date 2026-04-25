@@ -39,7 +39,7 @@ gcloud services enable \
   --project="$PROJECT_ID"
 
 # Create the Pub/Sub topic Cloud Billing will publish to
-gcloud pubsub topics create billing-alerts-nonprod --project="$PROJECT_ID"
+gcloud pubsub topics create cloud-alert-hub-events --project="$PROJECT_ID"
 
 # Create the GCS bucket the Cloud Function will use for persistent dedup
 # state. Without this, cold starts wipe in-memory dedup state and the same
@@ -144,7 +144,7 @@ state:
 export PROJECT_ID=my-nonprod-project
 export REGION=us-central1
 export FUNCTION_NAME=cloud-alert-hub-nonprod
-export PUBSUB_TOPIC=billing-alerts-nonprod
+export PUBSUB_TOPIC=cloud-alert-hub-events
 export RUNTIME=python312
 export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/XXX/YYY/ZZZ'
 
@@ -167,7 +167,7 @@ First deploy takes ~90 seconds; subsequent deploys are faster.
 
 Cloud Console → **Billing** → **Budgets & alerts** → pick or create a budget →
 **Manage notifications** → **Connect a Pub/Sub topic** → select
-`billing-alerts-nonprod` in `$PROJECT_ID`.
+`cloud-alert-hub-events` in `$PROJECT_ID`.
 
 The budget will now publish JSON to the topic whenever a configured threshold
 is crossed, which the Cloud Function will consume and post to Slack.
@@ -177,7 +177,7 @@ Alternative producers that work out of the box:
 | Source | How to wire it |
 |--------|----------------|
 | **Cloud Monitoring alert policy** | Create a Pub/Sub notification channel pointing to the same topic |
-| **Your own Cloud Run service** | `gcloud pubsub topics publish billing-alerts-nonprod --message='{…}'` |
+| **Your own Cloud Run service** | `gcloud pubsub topics publish cloud-alert-hub-events --message='{…}'` |
 | **Eventarc trigger** (Audit Logs, GCS, Firestore, …) | Have Eventarc forward the event to the same Pub/Sub topic |
 
 ## How we tested it (smoke tests)
@@ -191,7 +191,7 @@ topic, which Cloud Billing itself never sees.
 ```bash
 for frac in 0.50 0.90 1.20 2.10; do
   pct=$(python3 -c "print(int(round($frac*100)))")
-  gcloud pubsub topics publish billing-alerts-nonprod \
+  gcloud pubsub topics publish cloud-alert-hub-events \
     --project="$PROJECT_ID" \
     --attribute=billingAccountId=smoke-test,budgetId=smoke-test,schemaVersion=1.0 \
     --message="{\"budgetDisplayName\":\"smoke test (${pct}%)\",\
@@ -239,7 +239,7 @@ Any delivery failure is written to the dead-letter path
 After migrating from a legacy alerter, confirm the old function is gone:
 
 ```bash
-gcloud pubsub topics list-subscriptions billing-alerts-nonprod --project="$PROJECT_ID"
+gcloud pubsub topics list-subscriptions cloud-alert-hub-events --project="$PROJECT_ID"
 ```
 
 Expected: one subscription named `eventarc-<region>-cloud-alert-hub-nonprod-…`.

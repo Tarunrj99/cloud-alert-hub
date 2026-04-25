@@ -6,7 +6,69 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_No unreleased changes yet._
+### Added
+
+- **`tests/test_repo_hygiene.py`** — public-repo hygiene scanner. A
+  parametrised test that walks every tracked file (excluding venv /
+  build artefacts / `.git`) and fails the suite if any of the
+  reference deployment's real identifiers (project IDs, billing IDs,
+  Slack webhook URLs, recipient emails, company name, internal
+  topic / bucket / channel names) ever reappear. Includes a
+  self-test that feeds synthetic samples through the scanner so a
+  silently-broken regex can never reduce the guard to a no-op.
+- **`tests/test_documentation.py`** — documentation completeness
+  guard. Pins:
+  - existence of every top-level project file (LICENSE, README,
+    CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, CHANGELOG, …).
+  - existence + minimum-size of every doc under `docs/`.
+  - that the README cross-links to all high-value docs.
+  - that every example directory (`gcp-cloud-function`,
+    `aws-lambda`, `local-dev`) is a runnable scaffold (README +
+    requirements.txt).
+  - that every example payload fixture used by `SAMPLE_OUTPUT.md`
+    exists and parses as JSON.
+  - that `docs/ARCHITECTURE.md` mentions every moving part of the
+    pipeline (`adapter`, `policy`, `feature`, `manifest`,
+    `renderer`, `state`, `notifier`, `config`).
+  - that every shipped feature under `src/cloud_alert_hub/features/`
+    is documented in `docs/FEATURES.md`.
+- **`tests/test_public_api.py::test_manifest_block_aborts_delivery_end_to_end`**
+  and **`test_manifest_disabled_does_not_block_delivery`** — close
+  the gap between the unit-level manifest tests and the public
+  `run()` API. Together they prove that:
+  - a `ManifestStatus(allow=False)` for *any* reason — paused,
+    deprecated, 404, deployment override, network error in strict
+    mode — short-circuits delivery end-to-end and surfaces the
+    reason in `result["reason"]` and `result["debug"]["trace"]["manifest"]`.
+  - `app.manifest.enabled = false` lets alerts through unmolested.
+- `examples/local-dev/requirements.txt` — was implied by docs ("`pip
+  install -e ".[server]"`") but not actually present, so the
+  documentation completeness test was failing on first run.
+- `docs/ARCHITECTURE.md` now has a **"Runtime manifest (manifest.py)"**
+  section covering the four knobs (`runtime_status`, `min_version`,
+  `deprecated_versions`, per-deployment `deployments[id].allow`) and
+  the three failure modes (manifest-says-no, 404 / 403 / 410, network
+  error), and the request-lifecycle diagram now shows the manifest
+  step explicitly between adapter and feature matching.
+
+### Changed
+
+- The default Pub/Sub topic name used in every public doc, example
+  payload, and the GCP deploy script is now the explicit placeholder
+  `cloud-alert-hub-events`. Previously it leaked the reference
+  deployment's internal topic name. Affected: `README.md`,
+  `docs/QUICKSTART.md`, `docs/DEPLOY_GCP.md`, `docs/DEBUG_RUNBOOK.md`,
+  `examples/gcp-cloud-function/{README.md,deploy.sh}`, and the three
+  GCP example payload fixtures. Existing deployments are unaffected
+  — the topic name is only a default that can be overridden via the
+  `PUBSUB_TOPIC` env var or `--trigger-topic` flag.
+
+### Stats
+
+- Test count: **229 tests** (previously 98). New high-value categories:
+  - Documentation completeness: 36 tests
+  - Public-repo hygiene: 92 parametrised file scans + 2 self-tests
+  - End-to-end killswitch: 2 tests
 
 ---
 

@@ -196,6 +196,87 @@ def test_explicit_environment_in_payload_wins_over_config() -> None:
     assert result["debug"]["alert"]["environment"] == "staging"
 
 
+def test_manifest_block_aborts_delivery_end_to_end(monkeypatch) -> None:
+    """Integration test for the runtime manifest (a.k.a. killswitch).
+
+    Unit tests in ``test_manifest.py`` cover the various ways
+    :func:`check_manifest` can return ``allow=False`` (404 from
+    GitHub, paused status, deprecated version, deployment override,
+    network error in strict mode, etc.). This test bolts that
+    behaviour to the public API to guarantee the integration: if the
+    manifest verdict is ``allow=False`` for any reason, ``run()`` must
+    return a fully-formed ``suppressed`` result, never call any
+    notifier, and surface the manifest reason in the trace.
+
+    Without this test, a future refactor could move ``check_manifest``
+    out of the policy chain and silently break the killswitch.
+    """
+    from cloud_alert_hub import policy as policy_module
+    from cloud_alert_hub.manifest import ManifestStatus
+
+    def _fake_check_manifest(_cfg, *, deployment_id=None):  # noqa: ARG001
+        return ManifestStatus(
+            allow=False,
+            reason="manifest_test_blocked",
+            source="remote",
+            fetched_at=0.0,
+            descriptor={"runtime_status": "paused"},
+        )
+
+    monkeypatch.setattr(policy_module, "check_manifest", _fake_check_manifest)
+
+    cfg = _dry_run_config()
+    # Even with manifest enabled and a URL configured, the patched
+    # check_manifest returns allow=False — proving the policy honours it
+    # regardless of how the verdict was produced.
+    cfg["app"]["manifest"] = {
+        "enabled": True,
+        "url": "https://example.invalid/manifest.json",
+    }
+    payload = {
+        "cloud": "gcp",
+        "kind": "budget",
+        "title": "Budget 100%",
+        "summary": "should never reach Slack",
+        "labels": {"budget_name": "demo", "threshold_percent": "100"},
+    }
+
+    result = run(payload, source="generic", config=cfg)
+
+    assert result["status"] == "suppressed"
+    assert result["reason"] == "manifest_test_blocked"
+    # No delivery attempt, not even a dry_run one.
+    assert "deliveries" not in result or result["deliveries"] == {}
+    # Trace must record manifest verdict for audit / debugging.
+    assert "debug" in result
+    manifest_trace = result["debug"]["trace"]["manifest"]
+    assert manifest_trace["allow"] is False
+    assert manifest_trace["reason"] == "manifest_test_blocked"
+
+
+def test_manifest_disabled_does_not_block_delivery() -> None:
+    """The mirror of :func:`test_manifest_block_aborts_delivery_end_to_end`.
+
+    Confirms that when the manifest is *off* (the default for unit
+    tests — see ``_dry_run_config``), the policy chain proceeds
+    normally. This guards against an over-eager manifest implementation
+    accidentally rejecting alerts in deployments that haven't opted in.
+    """
+    cfg = _dry_run_config()
+    cfg["app"]["manifest"] = {"enabled": False}
+    payload = {
+        "cloud": "gcp",
+        "kind": "budget",
+        "title": "Budget 50%",
+        "summary": "manifest-off should still deliver",
+        "labels": {"budget_name": "demo", "threshold_percent": "50"},
+    }
+    result = run(payload, source="generic", config=cfg)
+    assert result["status"] == "processed"
+    assert result["debug"]["trace"]["manifest"]["allow"] is True
+    assert result["debug"]["trace"]["manifest"]["source"] == "disabled"
+
+
 def test_explicit_project_in_payload_wins_over_config(monkeypatch) -> None:
     """A canonical payload with an explicit project_id must not be clobbered
     by either app.project config or the runtime env var fallback."""

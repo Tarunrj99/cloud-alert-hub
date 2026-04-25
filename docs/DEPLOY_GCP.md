@@ -49,7 +49,7 @@ gcloud services enable \
 ## 2. Create (or pick) the Pub/Sub topic
 
 ```bash
-gcloud pubsub topics create billing-alerts-nonprod
+gcloud pubsub topics create cloud-alert-hub-events
 ```
 
 You'll attach GCP billing budgets (and optionally Cloud Monitoring alert
@@ -112,7 +112,7 @@ Edit `config.yaml` — at minimum:
 export PROJECT_ID=your-gcp-project
 export REGION=us-central1
 export FUNCTION_NAME=cloud-alert-hub-nonprod
-export PUBSUB_TOPIC=billing-alerts-nonprod
+export PUBSUB_TOPIC=cloud-alert-hub-events
 export SLACK_WEBHOOK_URL=https://hooks.slack.com/services/XXX/YYY/ZZZ
 chmod +x deploy.sh && ./deploy.sh
 ```

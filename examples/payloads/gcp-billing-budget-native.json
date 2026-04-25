@@ -9,5 +9,5 @@
     "messageId": "gcp-demo-001",
     "publishTime": "2026-04-25T00:00:00Z"
   },
-  "subscription": "projects/my-nonprod-project/subscriptions/billing-alerts-nonprod-sub"
+  "subscription": "projects/my-nonprod-project/subscriptions/cloud-alert-hub-events-sub"
 }
