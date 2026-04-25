@@ -17,6 +17,13 @@ app:
   # Optional human-readable identifier for this deployment. Useful for log
   # correlation across multiple Cloud Functions / Lambdas sharing this lib.
   deployment_id: ""
+  # Optional project / account ID the alerts originate from. Native cloud
+  # payloads (GCP budget Pub/Sub, AWS Budgets SNS, Azure cost alerts) often
+  # don't carry this — set it here to make Slack/email show the right
+  # ``Project: …`` context. If empty, the library falls back to the runtime
+  # env var ``GOOGLE_CLOUD_PROJECT`` / ``GCP_PROJECT`` / ``AWS_ACCOUNT_ID``
+  # which Cloud Functions / Cloud Run / Lambda set automatically.
+  project: ""
 
   # Upstream runtime manifest — periodic version-compatibility / deprecation
   # check. The library fetches a small JSON descriptor (cached, default 5 min)

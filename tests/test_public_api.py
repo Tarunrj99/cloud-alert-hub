@@ -121,3 +121,96 @@ def test_disabled_alerting_kills_delivery() -> None:
     result = run(payload, source="generic", config=cfg)
     assert result["status"] == "suppressed"
     assert result["reason"] == "global_alerting_disabled"
+
+
+def _native_gcp_budget_envelope() -> dict:
+    """Synthesizes a Pub/Sub envelope shaped exactly like Cloud Billing emits.
+
+    Crucially, it carries NO ``environment`` or ``project_id`` attribute — the
+    real GCP Billing service doesn't include them. The pipeline must backfill
+    these from operator config so renderers don't show ``unknown``.
+    """
+    import base64
+
+    native_budget = {
+        "budgetDisplayName": "Demo Monthly Budget",
+        "alertThresholdExceeded": 1.0,
+        "costAmount": 10000,
+        "budgetAmount": 10000,
+        "currencyCode": "USD",
+        "costIntervalStart": "2026-04-01T00:00:00Z",
+        "budgetAmountType": "SPECIFIED_AMOUNT",
+    }
+    return {
+        "message": {
+            "data": base64.b64encode(json.dumps(native_budget).encode("utf-8")).decode("ascii"),
+            "attributes": {"billingAccountId": "01ABCD-EFGH-IJKL"},
+        },
+    }
+
+
+def test_native_gcp_budget_inherits_environment_from_config() -> None:
+    cfg = _dry_run_config()
+    cfg["app"]["environment"] = "nonprod"
+    cfg["app"]["cloud"] = "gcp"
+    result = handle_gcp_pubsub(_native_gcp_budget_envelope(), config=cfg)
+    assert result["status"] == "processed"
+    assert result["debug"]["alert"]["environment"] == "nonprod"
+    assert result["debug"]["alert"]["cloud"] == "gcp"
+
+
+def test_native_gcp_budget_inherits_project_from_app_config() -> None:
+    cfg = _dry_run_config()
+    cfg["app"]["project"] = "my-team-nonprod"
+    result = handle_gcp_pubsub(_native_gcp_budget_envelope(), config=cfg)
+    assert result["status"] == "processed"
+    assert result["debug"]["alert"]["project"] == "my-team-nonprod"
+
+
+def test_native_gcp_budget_falls_back_to_GOOGLE_CLOUD_PROJECT_env_var(monkeypatch) -> None:
+    """When app.project is empty (the bundled default), the library should
+    auto-detect the project from the runtime env var that Cloud Functions /
+    Cloud Run set. This makes deployments work with zero config edits."""
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "auto-detected-project")
+    cfg = _dry_run_config()
+    cfg["app"].pop("project", None)
+    result = handle_gcp_pubsub(_native_gcp_budget_envelope(), config=cfg)
+    assert result["status"] == "processed"
+    assert result["debug"]["alert"]["project"] == "auto-detected-project"
+
+
+def test_explicit_environment_in_payload_wins_over_config() -> None:
+    """If the upstream payload explicitly sets environment, config must not override it."""
+    cfg = _dry_run_config()
+    cfg["app"]["environment"] = "nonprod"
+    payload = {
+        "cloud": "gcp",
+        "environment": "staging",
+        "kind": "budget",
+        "title": "Budget 100%",
+        "summary": "Test",
+        "labels": {"budget_name": "demo", "threshold_percent": "100"},
+    }
+    result = run(payload, source="generic", config=cfg)
+    assert result["status"] == "processed"
+    assert result["debug"]["alert"]["environment"] == "staging"
+
+
+def test_explicit_project_in_payload_wins_over_config(monkeypatch) -> None:
+    """A canonical payload with an explicit project_id must not be clobbered
+    by either app.project config or the runtime env var fallback."""
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "should-not-be-used")
+    cfg = _dry_run_config()
+    cfg["app"]["project"] = "also-should-not-be-used"
+    payload = {
+        "cloud": "gcp",
+        "environment": "nonprod",
+        "project": "explicit-from-payload",
+        "kind": "budget",
+        "title": "Budget 100%",
+        "summary": "Test",
+        "labels": {"budget_name": "demo", "threshold_percent": "100"},
+    }
+    result = run(payload, source="generic", config=cfg)
+    assert result["status"] == "processed"
+    assert result["debug"]["alert"]["project"] == "explicit-from-payload"

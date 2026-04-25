@@ -5,7 +5,7 @@
 # For production, pin to a tag (e.g. @v0.1.0) or a commit SHA so deploys are
 # reproducible. `@main` is convenient for quick iteration only.
 # ---------------------------------------------------------------------------
-git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.1#egg=cloud-alert-hub
+git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.2#egg=cloud-alert-hub
 
 # Cloud Functions 2nd gen runtime requires this:
 functions-framework>=3.5.0

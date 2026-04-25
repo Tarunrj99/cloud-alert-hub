@@ -7,6 +7,7 @@ Cloud Functions / Lambdas can call it in one line.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from .adapters import from_aws_sns, from_azure_eventgrid, from_gcp_pubsub, from_generic
@@ -15,6 +16,10 @@ from .models import CanonicalAlert
 from .processor import AlertProcessor
 from .state import BaseState, create_state_backend
 from .telemetry import MetricsTracker
+
+# Cloud-runtime env vars that name the project the function runs in. Used as
+# the final fallback when neither the upstream payload nor app.project is set.
+_RUNTIME_PROJECT_ENV_VARS = ("GOOGLE_CLOUD_PROJECT", "GCP_PROJECT", "AWS_ACCOUNT_ID")
 
 
 def _build_pipeline(user_config: Any) -> tuple[Config, BaseState, MetricsTracker, AlertProcessor]:
@@ -25,10 +30,44 @@ def _build_pipeline(user_config: Any) -> tuple[Config, BaseState, MetricsTracker
     return config, state, metrics, processor
 
 
+def _enrich_from_config(alert: CanonicalAlert, config: Config) -> CanonicalAlert:
+    """Backfill alert fields the upstream payload didn't provide.
+
+    Native cloud-vendor payloads (e.g. GCP Cloud Billing budget messages,
+    project-level CloudWatch SNS alarms) carry no notion of which
+    environment / project they belong to — that's the operator's knowledge.
+    If the adapter couldn't extract a value, fall back in this order:
+
+    1. ``app.environment`` / ``app.cloud`` / ``app.project`` from config
+    2. Cloud-runtime env vars (``GOOGLE_CLOUD_PROJECT``, ``GCP_PROJECT``)
+       — set automatically by Cloud Functions / Cloud Run / Lambda
+
+    This guarantees renderers always show useful context
+    (``Environment: nonprod``, ``Project: glossy-fastness-305315``) instead of
+    defaulting to ``unknown`` / hiding the field.
+    """
+    if not alert.environment or alert.environment == "unknown":
+        alert.environment = config.environment
+    if not alert.cloud or alert.cloud == "unknown":
+        alert.cloud = config.cloud
+    if not alert.project:
+        configured = str(config.get("app", "project", default="") or "").strip()
+        if configured:
+            alert.project = configured
+        else:
+            for env_name in _RUNTIME_PROJECT_ENV_VARS:
+                runtime_value = (os.getenv(env_name) or "").strip()
+                if runtime_value:
+                    alert.project = runtime_value
+                    break
+    return alert
+
+
 def process_alert(alert: CanonicalAlert, config: Any = None) -> dict[str, Any]:
     """Process an already-canonical alert. Returns the processor result dict."""
-    _, _, _, processor = _build_pipeline(config)
-    return processor.process(alert)
+    cfg, _, _, processor = _build_pipeline(config)
+    enriched = _enrich_from_config(alert, cfg)
+    return processor.process(enriched)
 
 
 def run(event: Any, source: str = "generic", config: Any = None) -> dict[str, Any]:

@@ -18,6 +18,12 @@ app:
   dry_run: false                # render and log, but don't actually send
   debug_mode: false             # include policy trace in responses (verbose)
   deployment_id: "my-team-nonprod-billing"  # optional — log/correlation tag
+  # Project / account ID the alerts originate from. Native budget payloads
+  # don't carry this attribute, so set it explicitly here to make Slack and
+  # email render "Project: …" correctly. If left blank, the library falls
+  # back to the runtime env var (GOOGLE_CLOUD_PROJECT / GCP_PROJECT /
+  # AWS_ACCOUNT_ID) that the cloud platform sets automatically.
+  project: ""                   # e.g. "my-team-nonprod" or "123456789012"
 
   # ---------------------------------------------------------------------------
   # Runtime manifest — periodic version-compatibility / deprecation check.

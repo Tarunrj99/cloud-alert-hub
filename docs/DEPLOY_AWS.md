@@ -66,7 +66,7 @@ cd ~/my-lambda-alerting
 ## 2. Point `requirements.txt` at your fork
 
 ```
-git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.1#egg=cloud-alert-hub
+git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.3.2#egg=cloud-alert-hub
 ```
 
 ## 3. Edit `config.yaml`

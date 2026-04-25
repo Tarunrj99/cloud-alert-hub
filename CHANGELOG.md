@@ -10,6 +10,46 @@ _No unreleased changes yet._
 
 ---
 
+## [0.3.2] — 2026-04-25
+
+Fixes Slack/email rendering on native cloud-vendor budget payloads. Cloud
+Billing (GCP) and Budgets (AWS) Pub/Sub / SNS messages don't carry an
+`environment` or `project_id` attribute, so previous releases rendered
+`Environment: unknown` and dropped the `Project:` field entirely. The
+pipeline now backfills both from operator config.
+
+### Added
+
+- New `app.project` config field — names the project / account ID the
+  alerts originate from. Surfaced in Slack/email as the `Project:` field.
+- Automatic fallback to runtime env vars (`GOOGLE_CLOUD_PROJECT`,
+  `GCP_PROJECT`, `AWS_ACCOUNT_ID`) when `app.project` is empty — Cloud
+  Functions / Cloud Run / Lambda set these for free, so existing
+  deployments inherit a sensible default with zero config edits.
+- Four new tests: env backfill, project backfill from `app.project`,
+  project backfill from `GOOGLE_CLOUD_PROJECT`, and explicit-payload-wins
+  precedence.
+
+### Fixed
+
+- `Environment: unknown` shown for native GCP budget alerts whose Pub/Sub
+  envelope had no `environment` attribute. Now resolves to the value of
+  `app.environment` from the deployment config.
+- Severity header banner missing the environment suffix
+  (`[CRITICAL]` instead of `[CRITICAL · nonprod]`) for the same reason.
+- `Project:` field hidden on native budget alerts because the adapter
+  couldn't find a `project_id` attribute. Now backfilled from
+  `app.project` or the cloud-runtime env var.
+
+### Notes
+
+- The fix is implemented once in the API layer (`api.py::_enrich_from_config`)
+  so all adapters (GCP, AWS, Azure, generic) benefit.
+- Explicit values from the upstream payload always win over config.
+  Backfill only happens when the canonical alert has no value.
+
+---
+
 ## [0.3.1] — 2026-04-25
 
 Adds an upstream runtime manifest so the library can advertise its own
@@ -203,7 +243,8 @@ Initial public release.
 - Status: beta — API surface is considered stable but may evolve before
   1.0. Breaking changes will be called out under `## [Unreleased]`.
 
-[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.2
 [0.3.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.1
 [0.2.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.2.1
 [0.2.0]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.2.0
