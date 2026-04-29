@@ -10,6 +10,93 @@ _No changes yet — open a PR to add an entry here._
 
 ---
 
+## [0.5.3] — 2026-04-29
+
+**Critical correctness fix.** Object-store dedup backends (gcs / s3 /
+azure_blob / file) were silently evicting long-window entries when a
+short-window alert arrived. In production this caused budget threshold
+alerts to re-fire mid-month after a smoke-test infrastructure alert
+wiped the dedup state.
+
+### Fixed
+
+- **`state._decide_and_update`**: garbage-collect entries against a
+  **fixed 90-day ceiling** (`_GC_MAX_AGE_SECONDS`) instead of `2 *
+  window_seconds` of the incoming alert. The previous logic was wrong
+  because the same backend stores entries from many features at once
+  (10-min `infrastructure_spike`, 32-day `budget_alerts`, 1-day
+  `cost_spike`, 1-min `security_audit`, …); using the incoming
+  alert's window for GC meant every short-window alert would silently
+  delete every long-window entry in the blob.
+
+  Concrete production bug this fixes: a Cloud Function using the GCS
+  backend received a smoke-test `infrastructure_spike` alert
+  (`window_seconds=600`, GC threshold = 1200s). The function
+  garbage-collected every other key older than 20 minutes — including
+  24 budget threshold entries that had been stable for 28 days. The
+  next 300% threshold republish from Cloud Billing then re-fired,
+  spamming Slack with a "300% threshold reached" alert that should
+  have been deduped for the rest of the month.
+
+  After this fix:
+  - A 600s-window alert no longer evicts entries newer than 90 days.
+  - Operators can mix arbitrary short and long windows in the same
+    deployment without cross-feature interference.
+  - Storage format is **unchanged** — backward-compatible with v0.5.0
+    – v0.5.2 state blobs.
+
+### Added
+
+- **`tests/test_state_backend.py`**: two regression tests pin the new
+  behaviour:
+  - `test_short_window_alert_does_not_evict_long_window_entries` —
+    realistic scenario (4-hour-old budget entry, infra alert with
+    600s window, must survive).
+  - `test_decide_and_update_uses_fixed_gc_ceiling_not_incoming_window`
+    — belt-and-braces (1-second incoming window must not GC
+    1-hour-old entries).
+
+### Changed
+
+- **`tests/test_state_backend.py::test_decide_and_update_garbage_collects_expired_keys`**:
+  previously asserted that a 10,000s-old (≈2.7 hour) entry got GC'd
+  by a 60s-window alert. That was testing the buggy behaviour. Now
+  uses a 200-day-old entry (well past the 90-day ceiling) so the
+  test continues to verify GC happens for genuinely expired entries
+  without depending on the incoming window.
+- **`bundled_defaults.yaml`**: reword the `state:` section comment.
+  Was: "garbage-collect expired entries automatically (after 2x
+  dedupe_window_seconds)" — that documented the bug. Now: "older
+  than a fixed 90-day ceiling … see v0.5.3 CHANGELOG."
+
+### Stats
+
+- Test count: **239** (was 237). Net +2 from the regression tests
+  above; the existing GC test was modified in-place to reflect the
+  corrected behaviour. `ruff check .` clean.
+
+### Operator note for v0.5.0–v0.5.2 deployments using gcs / s3 / azure_blob
+
+If you have an existing deployment on the buggy versions, your
+dedup state may have been silently truncated. Symptoms:
+
+- Budget threshold alerts re-firing mid-month even though they
+  should be deduped to once per (period × threshold).
+- Cost-spike alerts re-firing within 1 day for the same service
+  even though `dedupe_window_seconds: 86400` was set.
+- A surge of "duplicate" alerts shortly after any short-window
+  feature processed an event (typical: smoke tests, transient
+  CPU/memory spikes).
+
+Remediation: bump to `@v0.5.3` and redeploy. If you need to suppress
+already-fired-this-month thresholds from re-firing again before the
+period rolls over, pre-populate the dedup blob with synthetic entries.
+The format is documented in `docs/CONFIGURATION.md` (state section);
+each entry is `"<dedupe_key>": "<ISO timestamp>"` and surviving the
+window only requires the timestamp be newer than `now - window`.
+
+---
+
 ## [0.5.2] — 2026-04-29
 
 Documentation hygiene patch. Adds an "Adapter routing (cloud-specific
@@ -728,7 +815,8 @@ Initial public release.
 - Status: beta — API surface is considered stable but may evolve before
   1.0. Breaking changes will be called out under `## [Unreleased]`.
 
-[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.5.3
 [0.5.2]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.5.2
 [0.5.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.5.1
 [0.5.0]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.5.0

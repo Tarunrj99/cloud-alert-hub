@@ -68,16 +68,35 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# Garbage-collect any entry older than this fixed ceiling, regardless of
+# what window the incoming alert specifies. This MUST be larger than the
+# longest realistic feature window so cross-feature evictions can't happen.
+#
+# Why a fixed ceiling and not ``2 * window_seconds``: the same backend stores
+# entries from many features at once (10-min infrastructure_spike, 32-day
+# budget_alerts, 1-day cost_spike, …). If we used the *incoming* alert's
+# window for GC, a short-window alert would silently evict every long-window
+# entry in the blob — exactly what bit a deployment in v0.5.2: a smoke-test
+# infrastructure alert (10-min window, 20-min GC) wiped a budget's monthly
+# entries, causing the 300% threshold to re-fire mid-month. See v0.5.3
+# CHANGELOG and tests/test_state_backend.py for the regression.
+#
+# 90 days is comfortably above the longest first-class window (32-day budget)
+# and gives a generous post-mortem buffer; the JSON blob stays tiny in
+# practice (a few hundred entries × ~120 bytes = well under 100 KB).
+_GC_MAX_AGE_SECONDS = 90 * 24 * 3600
+
+
 def _decide_and_update(
     store: dict[str, str], key: str, window_seconds: int, now: datetime
 ) -> tuple[bool, dict[str, str]]:
     """Pure decision function shared by all object-store backends.
 
     Returns ``(suppress, new_store)`` where ``new_store`` has the bookkeeping
-    applied (``key`` stamped with ``now``) AND any expired keys garbage-
-    collected. We GC eagerly so the JSON blob does not grow unbounded; the
-    threshold is ``2 * window_seconds`` past expiry to give us a debugging
-    buffer if an operator wants to read the file post-mortem.
+    applied (``key`` stamped with ``now``) AND any entry older than the
+    fixed ``_GC_MAX_AGE_SECONDS`` ceiling garbage-collected. The ceiling is
+    intentionally NOT the incoming alert's ``window_seconds`` — see the
+    module-level comment for why.
     """
     fresh: dict[str, str] = {}
     suppress = False
@@ -87,7 +106,7 @@ def _decide_and_update(
         except ValueError:
             continue
         age = (now - ts).total_seconds()
-        if age >= window_seconds * 2:
+        if age >= _GC_MAX_AGE_SECONDS:
             continue
         fresh[stored_key] = ts_raw
         if stored_key == key and age < window_seconds:

@@ -151,19 +151,83 @@ def test_object_store_state_gives_up_after_too_many_conflicts() -> None:
 
 
 def test_decide_and_update_garbage_collects_expired_keys() -> None:
+    """Entries older than the global 90-day GC ceiling are evicted.
+
+    The GC threshold is **fixed** (not the incoming alert's window) —
+    see ``test_short_window_alert_does_not_evict_long_window_entries``
+    below for the regression history. We use 200 days here to be
+    well past the ceiling regardless of any future tuning.
+    """
     from datetime import timedelta
 
     now = _utcnow()
-    very_old = (now - timedelta(seconds=10_000)).isoformat()
+    centuries_old = (now - timedelta(days=200)).isoformat()
     fresh = (now - timedelta(seconds=10)).isoformat()
-    store = {"old:key": very_old, "new:key": fresh}
+    store = {"old:key": centuries_old, "new:key": fresh}
 
     suppress, fresh_store = _decide_and_update(store, "another:key", 60, now)
 
     assert suppress is False
-    assert "old:key" not in fresh_store, "expired key should be GC'd"
+    assert "old:key" not in fresh_store, "200-day-old entry should be GC'd"
     assert "new:key" in fresh_store
     assert "another:key" in fresh_store
+
+
+def test_short_window_alert_does_not_evict_long_window_entries() -> None:
+    """Regression: a short-window alert must NOT GC long-window entries.
+
+    Pre-v0.5.3, ``_decide_and_update`` used ``window_seconds * 2`` as
+    the GC threshold, where ``window_seconds`` was the *incoming*
+    alert's window. So a 10-minute infrastructure_spike alert
+    (window=600s, GC=1200s) would silently delete every other key
+    older than 20 minutes — including budget entries that are
+    supposed to live 32 days. In production this caused a 300%
+    budget threshold to re-fire after a smoke-test infra alert wiped
+    the dedup state.
+
+    This test asserts that an entry stamped a few hours ago — well
+    inside its 32-day budget window — survives a short-window alert
+    arriving later.
+    """
+    from datetime import timedelta
+
+    now = _utcnow()
+    a_few_hours_ago = (now - timedelta(hours=4)).isoformat()
+    budget_key = "gcp:proj:Apr-budget:2026-04-01T07:00:00Z:300"
+    store = {budget_key: a_few_hours_ago}
+
+    short_window = 600  # 10 minutes — typical infrastructure_spike
+    suppress, fresh_store = _decide_and_update(store, "infra:cpu:75", short_window, now)
+
+    assert suppress is False
+    assert budget_key in fresh_store, (
+        "long-window budget entry was evicted by a short-window infra alert; "
+        "this is the v0.5.2 dedup-eviction regression"
+    )
+    assert "infra:cpu:75" in fresh_store
+
+
+def test_decide_and_update_uses_fixed_gc_ceiling_not_incoming_window() -> None:
+    """A 1-second-window alert must not evict an hour-old entry.
+
+    Belt-and-braces companion to the regression test above: even with
+    an absurdly short incoming window, GC must respect the global
+    ceiling so we never evict entries the operator's other features
+    still need.
+    """
+    from datetime import timedelta
+
+    now = _utcnow()
+    one_hour_old = (now - timedelta(hours=1)).isoformat()
+    store = {"some:other:key": one_hour_old}
+
+    suppress, fresh_store = _decide_and_update(store, "incoming:key", 1, now)
+
+    assert suppress is False
+    assert "some:other:key" in fresh_store, (
+        "incoming window=1s must not GC entries an hour old; "
+        "GC threshold must be a fixed ceiling, not 2 * incoming window"
+    )
 
 
 # ---------------------------------------------------------------------------

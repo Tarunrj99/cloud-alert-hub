@@ -166,7 +166,9 @@ delivery:
 #                 Required: state.account_name and state.container
 #
 # All cloud backends use optimistic-concurrency writes and garbage-collect
-# expired entries automatically (after 2x dedupe_window_seconds).
+# entries older than a fixed 90-day ceiling. (Pre-v0.5.3 used 2x the
+# incoming alert's dedupe_window_seconds, which silently evicted long-window
+# entries when a short-window alert arrived — see v0.5.3 CHANGELOG.)
 state:
   backend: memory
   file_path: /tmp/cloud-alert-hub-dedupe.json
