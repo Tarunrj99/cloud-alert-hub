@@ -10,6 +10,36 @@ _No changes yet — open a PR to add an entry here._
 
 ---
 
+## [0.5.1] — 2026-04-29
+
+Documents a non-obvious trap discovered while operating the
+reference nonprod deployment: the most natural-looking
+"alert when someone changes the audit-log config" Cloud Monitoring
+filter (`protoPayload.request.policy.auditConfigs:*`) actually fires
+on **every** `SetIamPolicy` call, because `gcloud projects
+add-iam-policy-binding` echoes the full project policy (including the
+existing `auditConfigs`) into `request.policy`. The correct field to
+inspect is `protoPayload.serviceData.policyDelta.auditConfigDeltas`,
+which is only populated when audit configs actually change.
+
+No code change — Recipe G in `docs/RECIPES.md` now ships a "Variant
+— narrow to audit-config changes only" sub-section with both the
+broken and the correct filter, an explanation of why the broad filter
+matches everything, and a `gcloud logging read` replay snippet so an
+operator can verify the scope before relying on it. 237 tests, ruff
+clean.
+
+### Changed
+
+- `docs/RECIPES.md` Recipe G adds a new section 5: "Variant — narrow
+  to audit-config changes only (the cost-canary case)". Includes the
+  broken filter (clearly marked DON'T USE), the corrected filter, a
+  full `gcloud alpha monitoring policies create` invocation, and a
+  verification snippet that replays recent `SetIamPolicy` events
+  against both filters.
+
+---
+
 ## [0.5.0] — 2026-04-25
 
 Makes the library wirable to **any** GCP Cloud Monitoring policy via a

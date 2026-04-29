@@ -527,3 +527,73 @@ python -m cloud_alert_hub.tools.preview_slack \
 
 Pin the three label keys on the policy whenever you can, so each
 distinct (who, did-what, on-what) gets its own Slack alert.
+
+### 5. Variant — narrow to audit-config changes only (the cost-canary case)
+
+A common security ask is "alert me only when someone changes the
+**Data Access audit log** configuration", because re-enabling
+`DATA_READ` / `DATA_WRITE` on `allServices` can blow up Cloud Logging
+ingestion overnight. There is a **non-obvious trap** here that breaks
+the most natural-looking filter:
+
+```text
+# DON'T USE — over-broad, fires on every IAM change
+protoPayload.methodName="SetIamPolicy"
+protoPayload.request.policy.auditConfigs:*
+```
+
+Why the trap: `gcloud projects add-iam-policy-binding` (and most other
+IAM tooling) does a get-modify-set sequence and submits the **entire
+current project policy** in `request.policy`. Any project that already
+has `auditConfigs` defined will therefore have
+`request.policy.auditConfigs` populated on **every** `SetIamPolicy`
+call — even ones that only add a role binding. The filter above
+matches all of them.
+
+The correct field to inspect is `serviceData.policyDelta.auditConfigDeltas`
+— it is only populated when audit configs actually change:
+
+```text
+# DO USE — only fires on real audit-config changes
+protoPayload.methodName="SetIamPolicy"
+protoPayload.serviceData.policyDelta.auditConfigDeltas:*
+```
+
+End-to-end policy:
+
+```bash
+gcloud alpha monitoring policies create \
+  --notification-channels="$CHANNEL" \
+  --display-name="Audit Config Change Detected — SetIamPolicy" \
+  --documentation="ALERT: Someone modified the Data Access audit log configuration via SetIamPolicy. This can cause massive Cloud Logging cost increases if DATA_READ/DATA_WRITE are re-enabled. Verify in IAM > Audit Logs." \
+  --user-labels=kind=security,environment=nonprod,managed_by=cloud-alert-hub,resource=iam-policy,action=set_iam_policy \
+  --policy-from-file=- <<'YAML'
+displayName: Audit Config Change Detected — SetIamPolicy
+combiner: OR
+conditions:
+  - displayName: "Audit-config delta detected"
+    conditionMatchedLog:
+      filter: |
+        protoPayload.methodName="SetIamPolicy"
+        protoPayload.serviceData.policyDelta.auditConfigDeltas:*
+YAML
+```
+
+To verify the filter is correctly scoped before relying on it, replay
+the last day of `SetIamPolicy` calls against both filters and compare
+the counts:
+
+```bash
+# All SetIamPolicy calls (i.e. every role-binding change)
+gcloud logging read 'protoPayload.methodName="SetIamPolicy"
+resource.type="project"' --limit=100 --format='value(timestamp)' | wc -l
+
+# Only the ones that actually changed audit configs
+gcloud logging read 'protoPayload.methodName="SetIamPolicy"
+protoPayload.serviceData.policyDelta.auditConfigDeltas:*
+resource.type="project"' --limit=100 --format='value(timestamp)' | wc -l
+```
+
+In a healthy nonprod the second number should be near zero — it spikes
+only on a real audit-config edit, which is exactly when you want a
+Slack alert.
