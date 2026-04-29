@@ -52,6 +52,41 @@
 └─────────────┘
 ```
 
+### Adapter routing (cloud-specific layer)
+
+The adapter is the only cloud-specific layer in the pipeline. It does
+two things:
+
+1. **Decode the wire format** — Pub/Sub envelope, SNS message, Event
+   Grid event, generic JSON — into a `CanonicalAlert`.
+2. **Route the alert to the right feature** by setting `alert.kind`.
+
+Routing is driven by **operator-supplied tags on the source alerting
+policy**, not by the alert content. For GCP Cloud Monitoring this
+means `incident.policy_user_labels.kind`; for AWS SNS, message
+attributes; for Azure Event Grid, event properties. The mechanism is
+the same — only the wire format differs.
+
+For GCP specifically (since v0.5.0):
+
+| `policy_user_labels.kind` set on the policy | Routes to feature |
+|---|---|
+| (unset) | `service_slo` (default — keeps backward compatibility with old policies) |
+| `cost_spike` | `cost_spike` |
+| `infrastructure` | `infrastructure_spike` |
+| `security` | `security_audit` |
+
+This is why a single Cloud Function can serve every kind of alert in
+a project: a one-time `gcloud alpha monitoring policies update --update-user-labels=kind=infrastructure,environment=…,managed_by=cloud-alert-hub`
+is enough to wire any new policy through the right feature, with zero
+code change. The adapter also synthesises the dedupe-key fields each
+feature expects (`metric` / `threshold` for `infrastructure_spike`,
+`resource` / `action` / `principal` for `security_audit`) from the
+incident shape, and any other operator-supplied user labels flow
+through onto `alert.labels` so dedupe keys can be tightened without
+touching the library. See [`RECIPES.md`](RECIPES.md) for the exact
+`gcloud` invocations per feature.
+
 ## Two parallel delivery paths (what the library does, what the cloud does)
 
 The library **does not replace** your cloud's native email channels — it

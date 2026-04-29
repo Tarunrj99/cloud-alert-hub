@@ -241,11 +241,11 @@ my-alerting-function/
 Change the `git+https://...` line in `requirements.txt` to your fork, e.g.
 
 ```
-cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.5.0
+cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.5.2
 functions-framework>=3.5.0
 ```
 
-> Replace `v0.5.0` with the release tag you want to pin to. Check
+> Replace `v0.5.2` with the release tag you want to pin to. Check
 > [`CHANGELOG.md`](CHANGELOG.md) for the latest tagged version.
 
 The `[gcp]` extra is required if you're deploying to a GCP serverless runtime

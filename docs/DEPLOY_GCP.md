@@ -91,7 +91,7 @@ cd ~/my-alerting-function
 Edit `requirements.txt`:
 
 ```
-cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.4.0
+cloud-alert-hub[gcp] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.5.2
 functions-framework>=3.5.0
 ```
 

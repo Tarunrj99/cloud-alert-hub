@@ -10,6 +10,44 @@ _No changes yet — open a PR to add an entry here._
 
 ---
 
+## [0.5.2] — 2026-04-29
+
+Documentation hygiene patch. Adds an "Adapter routing (cloud-specific
+layer)" subsection to `docs/ARCHITECTURE.md` describing how the GCP
+adapter routes Cloud Monitoring incidents to features via
+`incident.policy_user_labels.kind` (introduced in v0.5.0 but not
+previously surfaced in the architecture doc), refreshes every example
+deployment's pinned tag from a mix of `@v0.4.0` / `@v0.4.1` / `@v0.5.0`
+to `@v0.5.2`, and back-fills the missing CHANGELOG link references
+for v0.4.1, v0.5.0, and v0.5.1.
+
+No code change. 237 tests, ruff clean.
+
+### Changed
+
+- `docs/ARCHITECTURE.md`: adds **Adapter routing (cloud-specific layer)**
+  subsection between the request-lifecycle diagram and the two-paths
+  diagram. Documents the `policy_user_labels.kind` mechanism for GCP,
+  the parallel mechanism on AWS (SNS message attributes) and Azure
+  (Event Grid properties), the four routing outcomes for GCP
+  (`(unset)` / `cost_spike` / `infrastructure` / `security`), and the
+  dedupe-key field synthesis the adapter performs per kind.
+- All example deployment pins (`README.md`, `examples/gcp-cloud-function/{README.md,requirements.txt}`,
+  `examples/aws-lambda/{README.md,requirements.txt}`,
+  `examples/local-dev/requirements.txt`,
+  `docs/DEPLOY_GCP.md`, `docs/DEPLOY_AWS.md`, `docs/DEPLOY_AZURE.md`)
+  now reference `@v0.5.2` consistently. Previously they were spread
+  across `@v0.4.0`, `@v0.4.1`, and `@v0.5.0`.
+- CHANGELOG link-reference footer back-fills `[0.5.2]`, `[0.5.1]`,
+  `[0.5.0]`, and `[0.4.1]`. Previously the latest link reference
+  was `[0.4.0]`.
+
+### Stats
+
+- Test count: still **237** (no test changes — docs-only patch).
+
+---
+
 ## [0.5.1] — 2026-04-29
 
 Documents a non-obvious trap discovered while operating the
@@ -690,7 +728,11 @@ Initial public release.
 - Status: beta — API surface is considered stable but may evolve before
   1.0. Breaking changes will be called out under `## [Unreleased]`.
 
-[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Tarunrj99/cloud-alert-hub/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.5.2
+[0.5.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.5.1
+[0.5.0]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.5.0
+[0.4.1]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.4.1
 [0.4.0]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.4.0
 [0.3.4]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.4
 [0.3.3]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/v0.3.3
