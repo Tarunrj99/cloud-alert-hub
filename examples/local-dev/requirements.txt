@@ -10,7 +10,7 @@
 # without re-installing. For a non-editable install replace the line below
 # with a release pin, e.g.:
 #
-#     cloud-alert-hub[server] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.5.2
+#     cloud-alert-hub[server] @ git+https://github.com/Tarunrj99/cloud-alert-hub.git@v0.5.3
 #
 # ---------------------------------------------------------------------------
 -e ../..[server]
