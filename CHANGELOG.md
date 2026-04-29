@@ -46,6 +46,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   appearing in the public repo. These aren't strictly secrets but
   fingerprint a specific deployment's `gcloud channels list` output.
 
+- **`tests/test_public_api.py`** (+5 integration tests): pin every
+  runtime-control "lever" end-to-end through `run()`, not just the
+  manifest module in isolation. Names are intentionally
+  operator-readable so a future incident-response reader can grep
+  `runtime_control` and immediately see every knob:
+  - `test_runtime_control_lever_1_global_pause_stops_every_alert` —
+    `service_status: "paused"` halts every deployment.
+  - `test_runtime_control_lever_2_deprecated_version_stops_just_that_version` —
+    `deprecated_versions: [...]` stops only matching versions.
+  - `test_runtime_control_lever_3_per_deployment_override_is_surgical` —
+    `deployment_overrides` stops one deployment, leaves others
+    running (the test asserts both halves of the surgical claim).
+  - `test_runtime_control_lever_4_repo_unreachable_fails_closed` —
+    private repo / 404 / deleted file fails closed by default
+    (`reason=manifest_unavailable`).
+  - `test_runtime_control_paused_then_active_round_trip` — flipping
+    back to `active` after `paused` actually resumes alerts. Catches
+    a class of cache-invalidation bugs that the per-knob tests
+    miss (a sticky `paused` verdict would silently keep alerts
+    suppressed forever).
+  Each test patches `policy.check_manifest` to call the *real*
+  `check_manifest` with a fake HTTP factory, so the decision logic
+  in `manifest.py` is exercised — not bypassed.
+
 ### Changed
 
 - **`docs/ARCHITECTURE.md`**: new "Garbage-collection contract
@@ -56,9 +80,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Stats
 
-- Test count: **256** (was 239). Net +17 from the new
-  release-hygiene file (14 tests) plus three architecture/doc
-  guards. `ruff check .` clean.
+- Test count: **261** (was 239). Net +22 from the release-hygiene
+  file (14 tests), three architecture/doc guards, and five
+  per-lever runtime-control integration tests. `ruff check .` clean.
 
 ### Why these tests exist (release-time checklist)
 
@@ -73,6 +97,8 @@ of these guards fail, **fix the artefact, don't loosen the test**:
 | `test_user_facing_pin_matches_pyproject_version` | sweep `@vX.Y.Z` pins in `README.md`, `docs/DEPLOY_*.md`, and `examples/**/requirements.txt` |
 | `test_architecture_doc_covers_adapter_routing_mechanism` | document a new routing kind in `docs/ARCHITECTURE.md` |
 | `test_architecture_doc_mentions_state_gc_ceiling` | document a change to the dedup GC contract |
+| `test_runtime_control_lever_*` | broke the runtime-control pipeline (manifest → policy chain). Each lever has its own test; the failing one names the broken lever |
+| `test_no_real_information_leaks_in_public_repo` | committed a real GCP project / billing / Slack / channel id / on-call email — replace with a placeholder, **never** allowlist |
 
 ---
 
