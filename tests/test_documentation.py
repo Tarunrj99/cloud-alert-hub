@@ -195,6 +195,75 @@ def test_architecture_doc_covers_every_component() -> None:
     )
 
 
+def test_architecture_doc_covers_adapter_routing_mechanism() -> None:
+    """The adapter routing mechanism (introduced in v0.5.0) must be
+    documented in ``docs/ARCHITECTURE.md``.
+
+    Why it's a separate test from "every component": the existing
+    component-coverage test only checks for generic words like
+    "adapter" and "policy". The *routing mechanism* the adapter uses
+    to decide which feature claims a Cloud Monitoring incident is a
+    behaviour, not a component, and was missed for two releases —
+    by the time we noticed, three deployments had been built without
+    the operator knowing the mechanism existed.
+
+    We require both:
+
+    1. The mechanism's canonical name: ``policy_user_labels``.
+    2. The full set of routable kinds (``cost_spike``,
+       ``infrastructure``, ``security``) so a reader sees the routing
+       table, not just one example.
+    """
+    arch = (REPO_ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
+    if "policy_user_labels" not in arch:
+        raise AssertionError(
+            "docs/ARCHITECTURE.md no longer mentions 'policy_user_labels'. "
+            "This is the canonical routing mechanism for Cloud Monitoring "
+            "incidents (v0.5.0+). Either the mechanism has been removed "
+            "(in which case update this test) or the doc has drifted and "
+            "the 'Adapter routing' subsection is missing."
+        )
+    arch_lower = arch.lower()
+    routable_kinds = ["cost_spike", "infrastructure", "security"]
+    missing = [k for k in routable_kinds if k not in arch_lower]
+    assert not missing, (
+        "docs/ARCHITECTURE.md mentions 'policy_user_labels' but doesn't "
+        f"document all routable kinds: missing {missing}. Reinstate the "
+        "routing table so a reader sees every (kind → feature) mapping, "
+        "not just one example."
+    )
+
+
+# ---------------------------------------------------------------------------
+# State-backend invariants — the v0.5.3 dedup-eviction bug was caused
+# by undocumented assumptions about how the backend GCs entries. Make
+# sure the contract is at least *mentioned* in ARCHITECTURE.md so future
+# refactors don't quietly re-break it.
+# ---------------------------------------------------------------------------
+
+
+def test_architecture_doc_mentions_state_gc_ceiling() -> None:
+    """``ARCHITECTURE.md`` must describe the state backend's GC behaviour.
+
+    Failure mode this catches: pre-v0.5.3 the GC threshold was
+    ``2 * window_seconds`` of the incoming alert, which silently
+    evicted long-window entries. The contract is now "fixed 90-day
+    ceiling", but a future contributor reading ARCHITECTURE.md
+    wouldn't have noticed the assumption. This test forces it to
+    appear in the doc.
+    """
+    arch = (REPO_ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8").lower()
+    keywords = ["dedup", "garbage", "ceiling"]
+    found = [kw for kw in keywords if kw in arch]
+    assert len(found) >= 2, (
+        "docs/ARCHITECTURE.md doesn't seem to document the dedup-state "
+        "garbage-collection contract. At least two of these words must "
+        f"appear: {keywords} (found {found}). The 90-day GC ceiling is "
+        "load-bearing for cross-feature dedup correctness — see v0.5.3 "
+        "CHANGELOG."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Each feature shipped under src/cloud_alert_hub/features/ must be
 # named in docs/FEATURES.md. Otherwise users can't discover it.

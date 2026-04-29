@@ -216,6 +216,27 @@ handles JSON encoding, expiry GC, and an optimistic-concurrency retry loop.
 Sub-classes implement just three thin methods (`_load_blob`, `_store_blob`,
 `_locator`), so adding a Redis or DynamoDB backend is ~30 lines.
 
+#### Garbage-collection contract (load-bearing)
+
+Object-store backends store every dedup key in a single shared blob. To
+keep that blob bounded, `_decide_and_update` garbage-collects entries
+older than a **fixed 90-day ceiling** (`_GC_MAX_AGE_SECONDS` in
+`state.py`).
+
+The ceiling is intentionally **not** the incoming alert's `window_seconds`.
+The same blob carries entries from many features at once — a 32-day
+`budget_alerts` entry sits next to a 10-minute `infrastructure_spike`
+entry. If GC used the incoming window, a short-window alert would
+silently evict every long-window entry on every write. v0.5.2 and earlier
+had this bug and it caused budget thresholds to re-fire mid-month after
+a smoke-test infra alert; see the v0.5.3 CHANGELOG entry for the post-mortem
+and the regression tests in `tests/test_state_backend.py`.
+
+If you ever need a longer-lived dedup window than 90 days (e.g. an
+annual review), bump `_GC_MAX_AGE_SECONDS` rather than introducing
+per-key window tracking — the blob stays simple, and 100 KB is still
+fine even with thousands of entries.
+
 #### Why object storage and not a database
 
 Every serverless platform already implicitly uses its cloud's object store

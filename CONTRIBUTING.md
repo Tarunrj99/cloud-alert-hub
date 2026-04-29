@@ -208,10 +208,29 @@ pytest tests/test_features.py::test_budget_feature_matches_budget_alerts -q
 1. Update `version` in `pyproject.toml`.
 2. Move entries from `## [Unreleased]` to a new version section in
    `CHANGELOG.md`.
-3. Commit: `chore(release): v0.y.z`.
-4. Tag: `git tag v0.y.z && git push --tags`.
-5. Downstream deployments pick it up by bumping the tag in their
+3. Append a `[X.Y.Z]: https://github.com/Tarunrj99/cloud-alert-hub/releases/tag/vX.Y.Z`
+   line to the link-ref footer at the bottom of `CHANGELOG.md`.
+4. Update the `[Unreleased]: …/compare/vX.Y.Z...HEAD` footer to point
+   at the new tag.
+5. **Sweep every `@vX.Y.Z` pin** in user-facing examples (`README.md`,
+   `docs/DEPLOY_*.md`, `examples/*/README.md`,
+   `examples/*/requirements.txt`) so anyone copying an example after
+   the release deploys the new version.
+6. Run `pytest -q` — `tests/test_release_hygiene.py` enforces every
+   step above and `tests/test_documentation.py` enforces that any new
+   architectural concept is documented. **If a hygiene test fails,
+   fix the artefact, don't loosen the test.**
+7. Commit: `chore(release): v0.y.z`.
+8. Tag: `git tag v0.y.z && git push --tags`.
+9. Downstream deployments pick it up by bumping the tag in their
    `requirements.txt`.
+
+The hygiene tests catch the failure modes we hit in v0.5.0–v0.5.3:
+stale CHANGELOG link refs, mismatched example pins (the v0.5.3 bug
+where a release advertised the fix but the examples still pointed at
+the buggy version), and undocumented routing/state contracts. See
+`CHANGELOG.md` under `[Unreleased]` for the per-test failure-to-fix
+mapping.
 
 ---
 

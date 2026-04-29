@@ -6,7 +6,73 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-_No changes yet — open a PR to add an entry here._
+### Added
+
+- **`tests/test_release_hygiene.py`** (new file, 14 tests). Pins four
+  release-time invariants that drifted during the v0.5.0–v0.5.3 series:
+
+  - `pyproject.toml` version → must have a matching `## [X.Y.Z]`
+    section in `CHANGELOG.md`.
+  - Every `## [X.Y.Z]` heading → must have a `[X.Y.Z]: …` link ref at
+    the bottom of the file (the GitHub auto-link footer).
+  - `[Unreleased]: …compare/vX.Y.Z…HEAD` → must compare against the
+    same X.Y.Z that pyproject advertises.
+  - Every `@vX.Y.Z` pin in user-facing examples (READMEs,
+    `docs/DEPLOY_*.md`, `examples/**/requirements.txt`) → must
+    equal the pyproject version. **This catches the v0.5.3 release bug
+    where `pyproject` was bumped but the example pins still pointed
+    at the buggy v0.5.2 — anyone copy-pasting an example would have
+    deployed the bug we'd just fixed.**
+
+  Each test includes a self-test that exercises the regex against
+  known-good and known-bad samples, so the scanner can never become a
+  silent no-op.
+
+- **`tests/test_documentation.py::test_architecture_doc_covers_adapter_routing_mechanism`**:
+  enforces that `docs/ARCHITECTURE.md` mentions
+  `policy_user_labels` and the full set of routable kinds
+  (`cost_spike`, `infrastructure`, `security`). v0.5.0 introduced the
+  routing mechanism but it wasn't documented for two more releases.
+
+- **`tests/test_documentation.py::test_architecture_doc_mentions_state_gc_ceiling`**:
+  enforces that the dedup-state GC contract is described in the
+  architecture doc. The 90-day ceiling is load-bearing for
+  cross-feature dedup correctness (see v0.5.3 post-mortem); a future
+  refactor mustn't quietly re-break the contract by making the
+  threshold dynamic again.
+
+- **`tests/test_repo_hygiene.py`**: forbids long numeric Cloud
+  Monitoring channel IDs (≥19-digit numbers starting with `1`) from
+  appearing in the public repo. These aren't strictly secrets but
+  fingerprint a specific deployment's `gcloud channels list` output.
+
+### Changed
+
+- **`docs/ARCHITECTURE.md`**: new "Garbage-collection contract
+  (load-bearing)" subsection under `BaseState` documents the 90-day
+  ceiling, the rationale (multi-feature shared blob), and the
+  v0.5.2 cross-eviction bug it prevents. Required by the new doc
+  test above; the doc was genuinely missing this contract.
+
+### Stats
+
+- Test count: **256** (was 239). Net +17 from the new
+  release-hygiene file (14 tests) plus three architecture/doc
+  guards. `ruff check .` clean.
+
+### Why these tests exist (release-time checklist)
+
+When cutting a new release, run `pytest -q` before tagging. If any
+of these guards fail, **fix the artefact, don't loosen the test**:
+
+| Test fails… | Means you forgot to… |
+| ----------- | -------------------- |
+| `test_pyproject_version_has_changelog_release_section` | write a CHANGELOG entry for the version you bumped |
+| `test_changelog_link_refs_cover_every_release_section` | append `[X.Y.Z]: https://…/releases/tag/vX.Y.Z` at the bottom |
+| `test_unreleased_link_ref_compares_against_latest_version` | update the `[Unreleased]: …compare/vX.Y.Z…HEAD` footer |
+| `test_user_facing_pin_matches_pyproject_version` | sweep `@vX.Y.Z` pins in `README.md`, `docs/DEPLOY_*.md`, and `examples/**/requirements.txt` |
+| `test_architecture_doc_covers_adapter_routing_mechanism` | document a new routing kind in `docs/ARCHITECTURE.md` |
+| `test_architecture_doc_mentions_state_gc_ceiling` | document a change to the dedup GC contract |
 
 ---
 

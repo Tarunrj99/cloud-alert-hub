@@ -155,6 +155,26 @@ _FORBIDDEN: list[tuple[re.Pattern[str], str]] = [
         re.compile(r"#GCP-Alerts-(?:Nonprod|Prod|Beta)", re.IGNORECASE),
         "reference deployment Slack channel name",
     ),
+    # Long numeric Cloud Monitoring notification-channel IDs (≥19 digits
+    # starting with 1). These aren't secrets but pin the output of
+    # `gcloud alpha monitoring channels list` from a specific account,
+    # which is enough to fingerprint the deployment. Generic small
+    # numbers (timestamps, ports) start lower or are shorter, so this
+    # band is reasonably tight.
+    (
+        re.compile(r"\b1[0-9]{18,19}\b"),
+        "reference deployment Cloud Monitoring channel id (long numeric)",
+    ),
+    # NOTE on a pattern we deliberately do NOT include:
+    #
+    #   r"\bcloud-alert-hub-(?:nonprod|prod|beta|dev|staging|qa)\b"
+    #
+    # ``cloud-alert-hub-nonprod`` is also the default function name in
+    # the *public* example deploy script — anyone deploying the library
+    # could end up with that name. It does not uniquely identify our
+    # deployment (the project id ``glossy-fastness-305315`` does, and
+    # we forbid that above). Adding the function-name pattern would
+    # falsely flag the public examples.
 ]
 
 
@@ -258,6 +278,7 @@ def test_hygiene_scanner_actually_catches_known_leaks(tmp_path: Path) -> None:
         ),
         "fake_j.txt": "billing_account: 01ABCD-EFGH12-IJKL34",  # real-looking, not the placeholder
         "fake_k.txt": "channel: #GCP-Alerts-Nonprod",
+        "fake_l.txt": "monitoring channel id: 15058480963135784543",
     }
     for name, content in samples.items():
         (tmp_path / name).write_text(content, encoding="utf-8")
